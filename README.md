@@ -83,21 +83,29 @@ Edit `~/.config/famlobster/.env` and fill in:
   ```
 - Leave `REMINDER_CHAT_ID` blank for now (see step 7)
 
-### 6. First run — authorize Google Calendar
+### 6. Authorize Google Calendar (run once on your laptop)
+
+The bot runs headlessly on the server, so you generate the auth token on your **Windows laptop** where a browser is available, then copy it to the server. You only ever do this once.
+
+**On your laptop:**
 
 ```bash
-source .venv/bin/activate
-dotenv -f ~/.config/famlobster/.env run python bot.py
+pip install google-auth-oauthlib
+python auth.py
 ```
 
-Or set the env file location before running:
+- It will ask for the path to your `credentials.json` (the file you downloaded from Google Cloud)
+- A browser opens — sign in with the Google account that owns the family calendar
+- Click through any "unverified app" warnings → Allow
+- `token.json` is saved in the current folder
+
+**Copy it to the server:**
 
 ```bash
-export $(cat ~/.config/famlobster/.env | grep -v '#' | xargs)
-python bot.py
+scp token.json famlobster@yourserver:~/.config/famlobster/token.json
 ```
 
-A browser window will open asking you to authorize Google Calendar access. Sign in with the account that owns the family calendar. After authorizing, `token.json` is written to `~/.config/famlobster/` and the browser can be closed.
+The token auto-refreshes silently — you'll never need to do this again unless you revoke access in your Google account settings.
 
 ### 7. Get your group chat ID (for reminders)
 

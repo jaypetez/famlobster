@@ -41,30 +41,26 @@ class CalendarServer:
     # ------------------------------------------------------------------
 
     def build_google_service(self) -> None:
-        """Load or create OAuth2 credentials, build the Calendar service.
+        """Load OAuth2 token and build the Calendar service.
 
-        Must be called synchronously before the asyncio loop starts.
+        token.json must already exist — generate it on your laptop by
+        running auth.py, then SCP it to ~/.config/famlobster/token.json.
+        The token auto-refreshes when expired.
         """
-        creds = None
         token_file = os.getenv("GOOGLE_TOKEN_FILE", "token.json")
         creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
 
-        if os.path.exists(token_file):
-            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        if not os.path.exists(token_file):
+            raise FileNotFoundError(
+                f"token.json not found at {token_file}.\n"
+                "Run auth.py on your laptop to generate it, then SCP it to this server.\n"
+                "See README.md for instructions."
+            )
 
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(creds_file, SCOPES)
-                auth_url, _ = flow.authorization_url(prompt="consent")
-                print("\n--- Google Calendar Authorization ---")
-                print("Open this URL in a browser (phone or laptop):\n")
-                print(auth_url)
-                print()
-                code = input("Paste the authorization code here: ").strip()
-                flow.fetch_token(code=code)
-                creds = flow.credentials
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
             with open(token_file, "w") as f:
                 f.write(creds.to_json())
 

@@ -173,14 +173,52 @@ Everything else is natural language — just talk to the bot.
 
 ## Troubleshooting
 
-**"credentials.json not found"** — Check that `GOOGLE_CREDENTIALS_FILE` in your `.env` points to the correct absolute path (e.g., `/home/you/.config/famlobster/credentials.json`).
+### Google Auth
 
-**"Token has been expired or revoked"** — Delete `~/.config/famlobster/token.json` and restart the bot to re-authorize.
+**Token stops working every 7 days**
+This happens when your OAuth app is still in "Testing" mode. Google limits refresh tokens to 7 days in testing mode. Fix it permanently:
+1. Google Cloud Console → **APIs & Services → OAuth consent screen**
+2. Click **Publish App** and confirm
+3. Re-run `auth.py` on your laptop and SCP a fresh `token.json` to the server — this is the last time you'll need to do it
 
-**Bot doesn't respond** — Check that the bot token in `.env` is correct and that the bot is not already running elsewhere.
+**"Token has been expired or revoked"**
+Re-run `auth.py` on your laptop and SCP the new `token.json` to the server:
+```bash
+python auth.py
+scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+```
 
-**"Quota exceeded"** — The Google Calendar API has a free quota of 1 million requests/day, which is more than enough for family use.
+**"token.json not found"**
+You need to run `auth.py` on your laptop first — see the setup steps above.
 
-**Reminders not sending** — Make sure `REMINDER_CHAT_ID` is set correctly (it should be a negative number for group chats). Use `/get_id` in the group to confirm.
+**"credentials.json not found"**
+Check that `GOOGLE_CREDENTIALS_FILE` in your `.env` points to the correct absolute path (e.g., `/home/famlobster/.config/famlobster/credentials.json`).
 
-**Calendar changes going to the wrong calendar** — Set `GOOGLE_CALENDAR_ID` in `.env` to the specific calendar ID. Find it in Google Calendar settings under each calendar's details.
+**"This app isn't verified" warning on the Google auth page**
+This is normal for private apps. Click **Advanced → Go to FamLobster (unsafe)** to proceed. It just means Google hasn't reviewed the app — it's your own app so this is fine.
+
+---
+
+### Telegram
+
+**Bot doesn't respond in the group chat**
+- Make sure the bot is actually running (`python bot.py` in a terminal or systemd service active)
+- Disable privacy mode in BotFather: `/mybots` → your bot → Bot Settings → Group Privacy → Turn off
+- Remove the bot from the group and re-add it after changing privacy mode
+- Try the command with your bot's username: `/get_id@YourBotName`
+
+**Bot doesn't respond at all**
+Check that `TELEGRAM_BOT_TOKEN` in `.env` is correct and the bot isn't already running in another terminal.
+
+---
+
+### Calendar
+
+**"Quota exceeded"**
+The Google Calendar API has a free quota of 1 million requests/day — more than enough for a family bot. If you hit this something is looping; check the logs.
+
+**Reminders not sending**
+Make sure `REMINDER_CHAT_ID` is set to a negative number (group chats always have negative IDs). Send `/get_id` in the group to confirm the correct value.
+
+**Calendar changes going to the wrong calendar**
+Set `GOOGLE_CALENDAR_ID` in `.env` to the specific calendar ID. Find it in Google Calendar → click the calendar → Settings → scroll down to "Calendar ID".

@@ -191,9 +191,17 @@ class CalendarServer:
                 )
                 return [types.TextContent(type="text", text=json.dumps(result))]
             except HttpError as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    "Google API error calling %s: %s %s", name, e.resp.status, e.reason
+                )
                 error = {"error": str(e.reason), "code": e.resp.status}
                 return [types.TextContent(type="text", text=json.dumps(error))]
             except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    "Unexpected error calling %s: %s", name, e, exc_info=True
+                )
                 error = {"error": str(e)}
                 return [types.TextContent(type="text", text=json.dumps(error))]
 

@@ -194,6 +194,18 @@ You need to run `auth.py` on your laptop first — see the setup steps above.
 **"credentials.json not found"**
 Check that `GOOGLE_CREDENTIALS_FILE` in your `.env` points to the correct absolute path (e.g., `/home/famlobster/.config/famlobster/credentials.json`).
 
+**Bot says "there's a technical issue with the calendar" or can't read/write events**
+The Google Calendar API is probably not enabled in your Google Cloud project:
+1. Go to Google Cloud Console → **APIs & Services → Library**
+2. Search for **Google Calendar API** → click it → click **Enable**
+3. Wait 30 seconds and try again
+
+If it's already enabled, your token.json may have been generated before the API was enabled. Re-run `auth.py` on your laptop to get a fresh token:
+```bash
+python auth.py
+scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+```
+
 **"This app isn't verified" warning on the Google auth page**
 This is normal for private apps. Click **Advanced → Go to FamLobster (unsafe)** to proceed. It just means Google hasn't reviewed the app — it's your own app so this is fine.
 

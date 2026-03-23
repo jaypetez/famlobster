@@ -48,9 +48,9 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "Hi! I'm FamLobster, your family calendar assistant.\n\n"
         "Just talk to me naturally — try things like:\n"
-        '• "What's on the calendar this week?"\n'
+        '• "What\'s on the calendar this week?"\n'
         '• "Add Jude\'s baseball game tomorrow at 4:30pm"\n'
-        '• "Move Tuesday's dentist to Thursday at 2pm"\n'
+        '• "Move Tuesday\'s dentist to Thursday at 2pm"\n'
         '• "Delete the PTA meeting on Friday"\n\n'
         "Use /reset to clear our conversation history.\n"
         "Use /get_id to see this chat's ID (useful for setting up reminders)."

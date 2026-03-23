@@ -7,7 +7,8 @@ so Claude can make multiple calendar API calls per user message.
 
 import logging
 import os
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import anthropic
 from mcp import ClientSession
@@ -72,8 +73,9 @@ class FamilyAgent:
     async def _run_tool_loop(self, chat_id: int) -> str:
         """Run the Claude tool-use loop until end_turn, return final text."""
         history = self.conversation_history[chat_id]
+        today = datetime.now(ZoneInfo(self.timezone)).date().isoformat()
         system = SYSTEM_PROMPT.format(
-            today=date.today().isoformat(),
+            today=today,
             timezone=self.timezone,
         )
 

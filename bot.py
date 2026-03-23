@@ -3,7 +3,7 @@ FamLobster — Family Telegram Calendar Bot
 
 Entry point. Wires together:
   - Telegram bot (python-telegram-bot v21)
-  - CalendarServer (in-process MCP server over Google Calendar)
+  - calendar_server.py (subprocess MCP server over Google Calendar)
   - FamilyAgent (Claude Haiku + tool-use loop)
   - APScheduler (morning summary + pre-event reminders)
 
@@ -14,8 +14,13 @@ Run:
 import asyncio
 import logging
 import os
+import sys
+from contextlib import AsyncExitStack
+from pathlib import Path
 
 from dotenv import load_dotenv
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.ext import (
@@ -29,7 +34,6 @@ from telegram.ext import (
 load_dotenv()
 
 from agent import FamilyAgent
-from calendar_server import CalendarServer
 from reminders import setup_scheduler
 
 logging.basicConfig(
@@ -104,16 +108,21 @@ async def post_init(application: Application) -> None:
     """Called by PTB after the event loop starts — wire up all components."""
     logger.info("Starting FamLobster...")
 
-    # Build Google Calendar service (runs sync OAuth flow if needed)
-    calendar_server = CalendarServer()
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, calendar_server.build_google_service)
-    logger.info("Google Calendar service ready")
+    # Launch calendar_server.py as an MCP subprocess
+    server_path = Path(__file__).parent / "calendar_server.py"
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=[str(server_path)],
+        env=dict(os.environ),
+    )
 
-    # Start in-process MCP server
-    mcp_session, server_task = await calendar_server.run_in_process()
-    application.bot_data["server_task"] = server_task
-    logger.info("MCP server running in-process")
+    exit_stack = AsyncExitStack()
+    application.bot_data["exit_stack"] = exit_stack
+
+    read, write = await exit_stack.enter_async_context(stdio_client(params))
+    mcp_session = await exit_stack.enter_async_context(ClientSession(read, write))
+    await mcp_session.initialize()
+    logger.info("MCP calendar server ready")
 
     # Create and configure the agent
     agent = FamilyAgent(mcp_session)
@@ -129,18 +138,14 @@ async def post_init(application: Application) -> None:
 
 
 async def post_shutdown(application: Application) -> None:
-    """Clean up background tasks on shutdown."""
+    """Clean up on shutdown."""
     scheduler = application.bot_data.get("scheduler")
     if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
 
-    server_task = application.bot_data.get("server_task")
-    if server_task and not server_task.done():
-        server_task.cancel()
-        try:
-            await server_task
-        except asyncio.CancelledError:
-            pass
+    exit_stack = application.bot_data.get("exit_stack")
+    if exit_stack:
+        await exit_stack.aclose()
 
     logger.info("FamLobster shut down cleanly")
 

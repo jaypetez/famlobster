@@ -15,15 +15,12 @@ import json
 import os
 from datetime import datetime, timezone
 
-import anyio
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from mcp.client.session import ClientSession
 from mcp.server import Server
-from mcp.server.models import InitializationOptions
 import mcp.types as types
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
@@ -312,27 +309,18 @@ class CalendarServer:
         ).execute()
         return {"status": "deleted", "event_id": event_id}
 
-    # ------------------------------------------------------------------
-    # In-process MCP server startup
-    # ------------------------------------------------------------------
+if __name__ == "__main__":
+    import asyncio
+    from mcp.server.stdio import stdio_server
 
-    async def run_in_process(self) -> tuple["ClientSession", "asyncio.Task"]:
-        """Start the MCP server in-process using anyio memory streams.
+    async def _serve() -> None:
+        cal = CalendarServer()
+        cal.build_google_service()
+        async with stdio_server() as (read_stream, write_stream):
+            await cal.server.run(
+                read_stream,
+                write_stream,
+                cal.server.create_initialization_options(),
+            )
 
-        Returns (client_session, server_task). The session is ready to use.
-        """
-        # Client → Server stream
-        c2s_send, c2s_recv = anyio.create_memory_object_stream(100)
-        # Server → Client stream
-        s2c_send, s2c_recv = anyio.create_memory_object_stream(100)
-
-        init_options = self.server.create_initialization_options()
-
-        server_task = asyncio.create_task(
-            self.server.run(c2s_recv, s2c_send, init_options)
-        )
-
-        session = ClientSession(s2c_recv, c2s_send)
-        await session.initialize()
-
-        return session, server_task
+    asyncio.run(_serve())

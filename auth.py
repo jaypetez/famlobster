@@ -24,7 +24,7 @@ except ImportError:
 
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
-    "https://www.googleapis.com/auth/gmail.modify",  # add/remove scopes as needed
+    "https://www.googleapis.com/auth/gmail.send",
 ]
 
 def main():

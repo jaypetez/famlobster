@@ -1,19 +1,21 @@
 """
-MCP server wrapping the Google Calendar API.
+MCP server wrapping Google Calendar and Gmail APIs.
 
-Exposes four tools to Claude:
+Exposes five tools to Claude:
   - list_events
   - create_event
   - update_event
   - delete_event
-
-Runs in-process using anyio memory streams so no subprocess is needed.
+  - send_email
 """
 
 import asyncio
+import base64
 import json
 import os
 from datetime import datetime, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -23,12 +25,16 @@ from googleapiclient.errors import HttpError
 from mcp.server import Server
 import mcp.types as types
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/gmail.send",
+]
 
 
 class CalendarServer:
     def __init__(self):
         self.service = None
+        self.gmail = None
         self.calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
         self.server = Server("famlobster-calendar")
         self._register_tools()
@@ -62,6 +68,7 @@ class CalendarServer:
                 f.write(creds.to_json())
 
         self.service = build("calendar", "v3", credentials=creds)
+        self.gmail = build("gmail", "v1", credentials=creds)
 
     # ------------------------------------------------------------------
     # Tool helpers
@@ -178,6 +185,28 @@ class CalendarServer:
                         "required": ["event_id"],
                     },
                 ),
+                types.Tool(
+                    name="send_email",
+                    description="Send an email from the family Gmail account.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "to": {
+                                "type": "string",
+                                "description": "Recipient email address",
+                            },
+                            "subject": {
+                                "type": "string",
+                                "description": "Email subject line",
+                            },
+                            "body": {
+                                "type": "string",
+                                "description": "Plain text email body",
+                            },
+                        },
+                        "required": ["to", "subject", "body"],
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -215,6 +244,8 @@ class CalendarServer:
             return self._update_event(args)
         elif name == "delete_event":
             return self._delete_event(args)
+        elif name == "send_email":
+            return self._send_email(args)
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -316,6 +347,18 @@ class CalendarServer:
             calendarId=self.calendar_id, eventId=event_id
         ).execute()
         return {"status": "deleted", "event_id": event_id}
+
+    def _send_email(self, args: dict) -> dict:
+        message = MIMEMultipart()
+        message["to"] = args["to"]
+        message["subject"] = args["subject"]
+        message.attach(MIMEText(args["body"], "plain"))
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        result = self.gmail.users().messages().send(
+            userId="me", body={"raw": raw}
+        ).execute()
+        return {"status": "sent", "message_id": result.get("id")}
+
 
 if __name__ == "__main__":
     import asyncio

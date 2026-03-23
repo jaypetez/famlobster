@@ -1,0 +1,22 @@
+# Secrets — never commit these
+.env
+credentials.json
+token.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log

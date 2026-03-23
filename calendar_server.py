@@ -57,7 +57,14 @@ class CalendarServer:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(creds_file, SCOPES)
-                creds = flow.run_console()
+                auth_url, _ = flow.authorization_url(prompt="consent")
+                print("\n--- Google Calendar Authorization ---")
+                print("Open this URL in a browser (phone or laptop):\n")
+                print(auth_url)
+                print()
+                code = input("Paste the authorization code here: ").strip()
+                flow.fetch_token(code=code)
+                creds = flow.credentials
             with open(token_file, "w") as f:
                 f.write(creds.to_json())
 

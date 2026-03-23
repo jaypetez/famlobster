@@ -49,18 +49,19 @@ All sensitive files go here — never inside the repo folder.
 2. Send `/newbot` and follow the prompts
 3. Copy the bot token (looks like `123456789:ABCdef...`)
 
-### 4. Set up Google Calendar API
+### 4. Enable Google APIs
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project (e.g., "FamLobster")
 2. Navigate to **APIs & Services → Library**, search for **Google Calendar API**, and enable it
-3. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-4. Set application type to **Desktop app**, give it any name, then click **Create**
-5. Click the download icon to download the JSON file
-6. Save it to your secrets directory — **not inside the repo**:
+3. In the same Library, search for **Gmail API** and enable it
+4. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+5. Set application type to **Desktop app**, give it any name, then click **Create**
+6. Click the download icon to download the JSON file
+7. Save it to your secrets directory — **not inside the repo**:
    ```bash
    mv ~/Downloads/client_secret_*.json ~/.config/famlobster/credentials.json
    ```
-7. Go to **APIs & Services → OAuth consent screen**:
+8. Go to **APIs & Services → OAuth consent screen**:
    - If using a personal Google account: set to **External**, add your email as a test user
    - If using Google Workspace: set to **Internal**
 
@@ -234,3 +235,19 @@ Make sure `REMINDER_CHAT_ID` is set to a negative number (group chats always hav
 
 **Calendar changes going to the wrong calendar**
 Set `GOOGLE_CALENDAR_ID` in `.env` to the specific calendar ID. Find it in Google Calendar → click the calendar → Settings → scroll down to "Calendar ID".
+
+---
+
+### Email
+
+**Bot can't send email / says Gmail isn't set up**
+Two things to check:
+1. Gmail API must be enabled: Google Cloud Console → **APIs & Services → Library → Gmail API → Enable**
+2. Your token.json must include the Gmail scope — re-run `auth.py` on your laptop (it will ask you to approve Gmail Send permission) and SCP the new token to the server:
+   ```bash
+   python auth.py
+   scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+   ```
+
+**Adding Gmail to an existing setup (already had Calendar working)**
+If you set up Calendar first and are adding Gmail now, you must re-authorize even if you already have a token.json — the old token doesn't have Gmail scope. Follow the two steps above.

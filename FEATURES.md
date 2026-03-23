@@ -114,20 +114,30 @@ Plan what's for dinner each day of the week. Family can check the plan, suggest 
 ---
 
 ## 📍 Family Location Check-In
-**Difficulty:** Medium
+**Difficulty:** Easy
 **Backend:** None (Telegram-native)
 
-Family members can share their location or status with the group ("I'm leaving school now", "running 20 min late"). The bot can log these and answer "where is everyone?"
+A family status board. No GPS or tracking — family members post their status as plain text and the bot remembers it. Anyone can ask where everyone is without scrolling back through the chat.
 
 **Example messages:**
-- "Where's Jude?"
-- "Tell the family I'm on my way home"
-- "I'll be 30 minutes late"
+- "I'm leaving school now"
+- "Heading to practice, back at 6"
+- "Running 20 min late"
+- "Where's Jude?" → "Jude said he was leaving school — 22 minutes ago"
+- "Where is everyone?" → Bot replies with each person's last check-in and timestamp
+
+**Optional: Telegram native location sharing**
+If a family member shares their live location in the chat, the bot can log it as a check-in ("Jude is near Lincoln Middle School"). Opt-in only — no automatic tracking.
+
+**Optional: Expected check-in alerts**
+Set a deadline for someone to check in: "remind me if Jude hasn't checked in by 3:30pm." The bot pings the group if the check-in never comes.
 
 **Implementation notes:**
-- Simplest version: bot relays messages to the group with a timestamp ("Jude said: leaving school — 3:42pm")
-- More advanced: store last-known status in memory, bot answers "where is everyone" from that
+- In-memory dict keyed by Telegram username: `{name: {status, timestamp}}`
+- Bot watches for messages that look like check-ins (uses Claude to classify) vs regular conversation
+- Or a `/checkin` command for explicit status updates
 - No external API needed — pure bot logic
+- Statuses reset on bot restart (acceptable for a family bot)
 
 ---
 

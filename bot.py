@@ -15,7 +15,6 @@ import asyncio
 import logging
 import os
 import sys
-from contextlib import AsyncExitStack
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -104,11 +103,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # ---------------------------------------------------------------------------
 
 
+async def _run_mcp_subprocess(
+    params: StdioServerParameters,
+    session_ready: asyncio.Event,
+    shutdown_event: asyncio.Event,
+    application: Application,
+) -> None:
+    """Keep the MCP subprocess alive for the bot's lifetime.
+
+    Runs as a background task. stdio_client's anyio cancel scope must
+    be entered and exited within the same task, so we hold it open here
+    and signal readiness via session_ready.
+    """
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            application.bot_data["mcp_session"] = session
+            session_ready.set()
+            await shutdown_event.wait()
+
+
 async def post_init(application: Application) -> None:
     """Called by PTB after the event loop starts — wire up all components."""
     logger.info("Starting FamLobster...")
 
-    # Launch calendar_server.py as an MCP subprocess
     server_path = Path(__file__).parent / "calendar_server.py"
     params = StdioServerParameters(
         command=sys.executable,
@@ -116,12 +134,17 @@ async def post_init(application: Application) -> None:
         env=dict(os.environ),
     )
 
-    exit_stack = AsyncExitStack()
-    application.bot_data["exit_stack"] = exit_stack
+    session_ready = asyncio.Event()
+    shutdown_event = asyncio.Event()
+    application.bot_data["shutdown_event"] = shutdown_event
 
-    read, write = await exit_stack.enter_async_context(stdio_client(params))
-    mcp_session = await exit_stack.enter_async_context(ClientSession(read, write))
-    await mcp_session.initialize()
+    mcp_task = asyncio.create_task(
+        _run_mcp_subprocess(params, session_ready, shutdown_event, application)
+    )
+    application.bot_data["mcp_task"] = mcp_task
+
+    await session_ready.wait()
+    mcp_session = application.bot_data["mcp_session"]
     logger.info("MCP calendar server ready")
 
     # Create and configure the agent
@@ -143,9 +166,17 @@ async def post_shutdown(application: Application) -> None:
     if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
 
-    exit_stack = application.bot_data.get("exit_stack")
-    if exit_stack:
-        await exit_stack.aclose()
+    # Signal the MCP subprocess task to exit cleanly
+    shutdown_event = application.bot_data.get("shutdown_event")
+    if shutdown_event:
+        shutdown_event.set()
+
+    mcp_task = application.bot_data.get("mcp_task")
+    if mcp_task and not mcp_task.done():
+        try:
+            await asyncio.wait_for(mcp_task, timeout=5.0)
+        except (asyncio.TimeoutError, Exception):
+            mcp_task.cancel()
 
     logger.info("FamLobster shut down cleanly")
 

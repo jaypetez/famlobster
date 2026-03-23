@@ -16,9 +16,7 @@ import os
 from datetime import datetime, timezone
 
 import anyio
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from mcp.client.session import ClientSession
@@ -41,32 +39,14 @@ class CalendarServer:
     # ------------------------------------------------------------------
 
     def build_google_service(self) -> None:
-        """Load or create OAuth2 credentials, build the Calendar service.
-
-        Must be called synchronously before the asyncio loop starts.
-        """
-        creds = None
-        token_file = os.getenv("GOOGLE_TOKEN_FILE", "token.json")
-        creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
-
-        if os.path.exists(token_file):
-            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
-
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(creds_file, SCOPES)
-                auth_url, _ = flow.authorization_url(prompt="consent")
-                print("\n--- Google Calendar Authorization ---")
-                print("Open this URL in a browser (phone or laptop):\n")
-                print(auth_url)
-                print()
-                code = input("Paste the authorization code here: ").strip()
-                flow.fetch_token(code=code)
-                creds = flow.credentials
-            with open(token_file, "w") as f:
-                f.write(creds.to_json())
+        """Load service account credentials and build the Calendar service."""
+        key_file = os.getenv(
+            "GOOGLE_SERVICE_ACCOUNT_FILE",
+            os.path.expanduser("~/.config/famlobster/service-account.json"),
+        )
+        creds = service_account.Credentials.from_service_account_file(
+            key_file, scopes=SCOPES
+        )
 
         self.service = build("calendar", "v3", credentials=creds)
 

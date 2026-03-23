@@ -49,22 +49,34 @@ All sensitive files go here — never inside the repo folder.
 2. Send `/newbot` and follow the prompts
 3. Copy the bot token (looks like `123456789:ABCdef...`)
 
-### 4. Set up Google Calendar API
+### 4. Set up Google Calendar API (Service Account)
+
+No browser or OAuth flow needed — the bot uses a service account key file.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project (e.g., "FamLobster")
 2. Navigate to **APIs & Services → Library**, search for **Google Calendar API**, and enable it
-3. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-4. Set application type to **Desktop app**, give it any name, then click **Create**
-5. Click the download icon to download the JSON file
-6. Save it to your secrets directory — **not inside the repo**:
+3. Go to **APIs & Services → Credentials → Create Credentials → Service account**
+4. Give it a name (e.g., "famlobster"), click **Create and Continue**, skip the optional steps, click **Done**
+5. Click the service account you just created, go to the **Keys** tab
+6. Click **Add Key → Create new key → JSON → Create**
+7. A JSON file downloads — save it to your secrets directory:
    ```bash
-   mv ~/Downloads/client_secret_*.json ~/.config/famlobster/credentials.json
+   mv ~/Downloads/*.json ~/.config/famlobster/service-account.json
    ```
-7. Go to **APIs & Services → OAuth consent screen**:
-   - If using a personal Google account: set to **External**, add your email as a test user
-   - If using Google Workspace: set to **Internal**
+8. Copy the service account's email address (looks like `famlobster@your-project.iam.gserviceaccount.com`) — you'll need it in the next step
 
-### 5. Configure environment
+### 5. Share your Google Calendar with the service account
+
+The bot can only access calendars explicitly shared with it.
+
+1. Open **Google Calendar** on the web
+2. Find your family calendar in the left sidebar → click the three dots → **Settings and sharing**
+3. Scroll to **Share with specific people** → **Add people**
+4. Paste the service account email from step 4
+5. Set permission to **Make changes to events**
+6. Click **Send**
+
+### 6. Configure environment
 
 Create your `.env` file in the secrets directory:
 
@@ -76,34 +88,25 @@ Edit `~/.config/famlobster/.env` and fill in:
 - `TELEGRAM_BOT_TOKEN` — from BotFather
 - `ANTHROPIC_API_KEY` — from [console.anthropic.com](https://console.anthropic.com)
 - `TIMEZONE` — your family's timezone (e.g., `America/Chicago`)
-- Point the credential paths to your secrets directory:
+- `GOOGLE_SERVICE_ACCOUNT_FILE` — full path to your key file:
   ```
-  GOOGLE_CREDENTIALS_FILE=/home/YOUR_USERNAME/.config/famlobster/credentials.json
-  GOOGLE_TOKEN_FILE=/home/YOUR_USERNAME/.config/famlobster/token.json
+  GOOGLE_SERVICE_ACCOUNT_FILE=/home/famlobster/.config/famlobster/service-account.json
   ```
-- Leave `REMINDER_CHAT_ID` blank for now (see step 7)
+- Leave `REMINDER_CHAT_ID` blank for now (see step 8)
 
-### 6. First run — authorize Google Calendar
+### 7. Run the bot
 
 ```bash
-source .venv/bin/activate
 dotenv -f ~/.config/famlobster/.env run python bot.py
 ```
 
-Or set the env file location before running:
+No browser auth needed — it connects immediately using the service account key.
 
-```bash
-export $(cat ~/.config/famlobster/.env | grep -v '#' | xargs)
-python bot.py
-```
-
-A browser window will open asking you to authorize Google Calendar access. Sign in with the account that owns the family calendar. After authorizing, `token.json` is written to `~/.config/famlobster/` and the browser can be closed.
-
-### 7. Get your group chat ID (for reminders)
+### 8. Get your group chat ID (for reminders)
 
 1. Add your bot to your family Telegram group chat
 2. Send `/get_id` in the group chat
-3. The bot will reply with the chat ID (a negative number like `-1001234567890`)
+3. The bot replies with the chat ID (a negative number like `-1001234567890`)
 4. Add it to `~/.config/famlobster/.env` as `REMINDER_CHAT_ID`
 5. Restart the bot
 
@@ -165,9 +168,9 @@ Everything else is natural language — just talk to the bot.
 
 ## Troubleshooting
 
-**"credentials.json not found"** — Check that `GOOGLE_CREDENTIALS_FILE` in your `.env` points to the correct absolute path (e.g., `/home/you/.config/famlobster/credentials.json`).
+**"service-account.json not found"** — Check that `GOOGLE_SERVICE_ACCOUNT_FILE` in your `.env` points to the correct absolute path (e.g., `/home/famlobster/.config/famlobster/service-account.json`).
 
-**"Token has been expired or revoked"** — Delete `~/.config/famlobster/token.json` and restart the bot to re-authorize.
+**"Calendar not found" or no events showing** — Make sure you shared the calendar with the service account email address and set permission to "Make changes to events".
 
 **Bot doesn't respond** — Check that the bot token in `.env` is correct and that the bot is not already running elsewhere.
 

@@ -21,8 +21,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from mcp import ClientSession
-from mcp.server.lowlevel import Server
+from mcp.client.session import ClientSession
+from mcp.server import Server
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 

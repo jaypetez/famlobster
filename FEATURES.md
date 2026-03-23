@@ -53,12 +53,24 @@ When someone asks about an event or a day, the bot can automatically include a w
 - "What's the weather like for Saturday's game?"
 - "Will it rain this week?"
 - "What should the kids wear tomorrow?"
+- "Do I need to bring a jacket tonight?"
+- "Should we reschedule Saturday's outdoor plans?"
+
+**How it works with calendar:**
+When you ask about an event, Claude automatically calls both `list_events` and `get_weather` and combines the answer:
+> "Jude's baseball practice is Saturday at 4:30pm. Weather looks good — sunny, 68°F, no rain. Light wind from the west."
+
+The morning summary can also include weather for outdoor events automatically:
+> "Good morning! Today's events:
+> • Baseball practice at 4:30pm — sunny, 72°F, perfect for a game
+> • Dentist at 2pm"
 
 **Implementation notes:**
 - Open-Meteo is completely free with no API key — just an HTTP call with lat/lon
 - Add `FAMILY_LATITUDE` and `FAMILY_LONGITUDE` to `.env`
-- Single `get_weather(date)` tool — Claude will call it when a message involves weather or outdoor plans
-- Can combine with calendar: "show me this week's events with weather"
+- Two tools: `get_weather(date)` for a full day forecast, `get_weather_for_event(event_id)` that fetches the event then gets weather for that time
+- Forecasts available 7 days out — covers anything on the near-term calendar
+- Morning reminder job updated to append weather to any outdoor-sounding events (sport, game, practice, park, etc.)
 
 ---
 

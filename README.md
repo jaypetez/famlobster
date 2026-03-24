@@ -23,29 +23,40 @@
             (______|______)
 ```
 
-A family Telegram bot that manages your Google Calendar using natural language, powered by Claude Haiku and the Model Context Protocol (MCP).
+A family Telegram bot that manages your Google Calendar and sends email using
+natural language. Powered by Claude AI and the Model Context Protocol (MCP).
 
-**Example messages:**
+Just text the bot like you'd text a family member:
 - "What's on the calendar this week?"
 - "Add Jude's baseball game tomorrow at 4:30pm"
 - "Move Tuesday's dentist appointment to Thursday at 2pm"
-- "Delete the PTA meeting on Friday"
+- "Email grandma that the kids have a recital on Saturday"
+
+The bot also sends a **morning summary** of the day's events and **pre-event reminders**
+so nobody misses anything.
 
 ---
 
-## Prerequisites
+## What you'll need
 
-- Python 3.11+
-- A Google account with access to the family calendar
-- A Telegram account
+Before you start, make sure you have the following:
+
+| What | Why | Cost |
+|------|-----|------|
+| **A Linux server or Raspberry Pi** | The bot needs to run 24/7. Any always-on machine with SSH works: a home server, a Raspberry Pi, a $5/mo VPS (DigitalOcean, Linode, etc.) | Free if you have spare hardware, ~$5/mo for a VPS |
+| **Python 3.11+** | The bot is written in Python | Free |
+| **A Google account** | For Calendar and Gmail access. We recommend creating a **dedicated Google account** for FamLobster (e.g., `famlobster.yourfamily@gmail.com`) so the bot has its own calendar and inbox, separate from your personal account. Share your family calendar with this account. | Free |
+| **An Anthropic API key** | The bot uses Claude AI to understand your messages. Get one at [console.anthropic.com](https://console.anthropic.com). We use **Claude Haiku** which is the cheapest model — a typical family will spend **less than $1/month** on API calls. | ~$1/mo |
+| **A Telegram account** | Your family chats with the bot through Telegram. Everyone in the family needs the free Telegram app on their phone. | Free |
+| **A computer with a browser** (one-time only) | For the initial Google authorization step. Your laptop or phone works. You only need this once during setup. | You already have one |
 
 ---
 
 ## Setup
 
-> **Security note:** Keep all secrets (API keys, credentials, tokens) **outside the repo folder**.
-> The steps below store them in `~/.config/famlobster/` so they can never accidentally be committed,
-> even if `.gitignore` is misconfigured or you run `git add .` by mistake.
+> **Security note:** All secrets (API keys, credentials, tokens) are stored **outside the repo**
+> in `~/.config/famlobster/`. They can never accidentally be committed to git, even if you
+> run `git add .` by mistake.
 
 ### 1. Clone and install dependencies
 
@@ -87,6 +98,7 @@ All sensitive files go here — never inside the repo folder.
 8. Go to **APIs & Services → OAuth consent screen**:
    - If using a personal Google account: set to **External**, add your email as a test user
    - If using Google Workspace: set to **Internal**
+9. **Important:** After setting up the consent screen, click **Publish App** on the same page. If you skip this, Google will expire your login token every 7 days and you'll have to re-authorize weekly. Publishing just removes that limit — your app is still private and only accessible to the test users you added. You do not need Google's verification for a personal app.
 
 ### 5. Configure environment
 

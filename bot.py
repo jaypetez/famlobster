@@ -3,7 +3,7 @@ FamLobster — Family Telegram Calendar Bot
 
 Entry point. Wires together:
   - Telegram bot (python-telegram-bot v21)
-  - calendar_server.py (subprocess MCP server over Google Calendar)
+  - mcp_server.py (subprocess MCP server for Google Calendar, Gmail, Tasks)
   - FamilyAgent (Claude Haiku + tool-use loop)
   - APScheduler (morning summary + pre-event reminders)
 
@@ -127,7 +127,7 @@ async def post_init(application: Application) -> None:
     """Called by PTB after the event loop starts — wire up all components."""
     logger.info("Starting FamLobster...")
 
-    server_path = Path(__file__).parent / "calendar_server.py"
+    server_path = Path(__file__).parent / "mcp_server.py"
     params = StdioServerParameters(
         command=sys.executable,
         args=[str(server_path)],

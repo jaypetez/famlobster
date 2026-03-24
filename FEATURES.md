@@ -44,7 +44,7 @@ Users just talk naturally — Claude decides which list and which action:
 
 **Setup required:**
 - Enable **Google Tasks API** in Google Cloud Console (same project as Calendar)
-- Add `https://www.googleapis.com/auth/tasks` scope to `auth.py` and `calendar_server.py`
+- Add `https://www.googleapis.com/auth/tasks` scope to `auth.py` and `mcp_server.py`
 - Re-run `auth.py` on your laptop to get a new token with the Tasks scope (same process as when Gmail was added)
 - Update system prompt in `agent.py` so Claude knows about the lists
 

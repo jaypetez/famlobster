@@ -30,13 +30,13 @@ SCOPES = [
 ]
 
 
-class CalendarServer:
+class MCPServer:
     def __init__(self):
         self.service = None
         self.gmail = None
         self.tasks = None
         self.calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
-        self.server = Server("famlobster-calendar")
+        self.server = Server("famlobster")
         self._register_tools()
 
     # ------------------------------------------------------------------
@@ -526,7 +526,7 @@ if __name__ == "__main__":
     from mcp.server.stdio import stdio_server
 
     async def _serve() -> None:
-        cal = CalendarServer()
+        cal = MCPServer()
         cal.build_google_service()
         async with stdio_server() as (read_stream, write_stream):
             await cal.server.run(

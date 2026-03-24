@@ -18,7 +18,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from mcp import ClientSession
 from telegram import Bot
 
-from reminders import (
+from .reminders import (
     add_reminder,
     get_all_reminders,
     remove_reminder,

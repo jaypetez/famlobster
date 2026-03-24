@@ -32,8 +32,8 @@ from telegram.ext import (
 
 load_dotenv()
 
-from agent import FamilyAgent
-from reminders import setup_scheduler
+from .agent import FamilyAgent
+from .reminders import setup_scheduler
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",

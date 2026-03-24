@@ -50,7 +50,7 @@ If you're comfortable with Google Cloud, OAuth, and Telegram bots, here's the sh
 # 1. Clone and install
 git clone https://github.com/jaypetez/famlobster.git && cd famlobster
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 
 # 2. Set up secrets (outside the repo)
 mkdir -p ~/.config/famlobster && chmod 700 ~/.config/famlobster
@@ -65,7 +65,7 @@ mv token.json ~/.config/famlobster/token.json
 
 # 4. Run
 export $(cat ~/.config/famlobster/.env | grep -v '#' | xargs)
-python bot.py
+famlobster
 ```
 
 Send `/get_id` in your Telegram group to get the chat ID for reminders, add it to `.env`, and restart.
@@ -102,7 +102,7 @@ git clone <repo-url>
 cd famlobster
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 2. Create a secrets directory outside the repo
@@ -222,7 +222,7 @@ The token auto-refreshes silently — you'll never need to do this again unless 
 cd famlobster
 source .venv/bin/activate
 export $(cat ~/.config/famlobster/.env | grep -v '#' | xargs)
-python bot.py
+famlobster
 ```
 
 ### Running in production (systemd)
@@ -239,7 +239,7 @@ Type=simple
 User=your-username
 WorkingDirectory=/path/to/famlobster
 EnvironmentFile=/home/your-username/.config/famlobster/.env
-ExecStart=/path/to/famlobster/.venv/bin/python bot.py
+ExecStart=/path/to/famlobster/.venv/bin/famlobster
 Restart=on-failure
 RestartSec=10
 
@@ -325,7 +325,7 @@ This is normal for private apps. Click **Advanced → Go to FamLobster (unsafe)*
 ### Telegram
 
 **Bot doesn't respond in the group chat**
-- Make sure the bot is actually running (`python bot.py` in a terminal or systemd service active)
+- Make sure the bot is actually running (`famlobster` in a terminal or systemd service active)
 - Disable privacy mode in BotFather: `/mybots` → your bot → Bot Settings → Group Privacy → Turn off
 - Remove the bot from the group and re-add it after changing privacy mode
 - Try the command with your bot's username: `/get_id@YourBotName`

@@ -26,6 +26,38 @@ The bot also sends a **morning summary** of the day's events and **pre-event rem
 
 ---
 
+## Quickstart
+
+If you're comfortable with Google Cloud, OAuth, and Telegram bots, here's the short version:
+
+```bash
+# 1. Clone and install
+git clone https://github.com/jaypetez/famlobster.git && cd famlobster
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Set up secrets (outside the repo)
+mkdir -p ~/.config/famlobster && chmod 700 ~/.config/famlobster
+cp .env.example ~/.config/famlobster/.env
+# Edit ~/.config/famlobster/.env with your Telegram bot token, Anthropic API key, etc.
+
+# 3. Google OAuth (needs a browser — run on your laptop if server is headless)
+# Enable Calendar API + Gmail API in Google Cloud Console
+# Create OAuth Desktop credentials, download as credentials.json
+python auth.py
+mv token.json ~/.config/famlobster/token.json
+
+# 4. Run
+export $(cat ~/.config/famlobster/.env | grep -v '#' | xargs)
+python bot.py
+```
+
+Send `/get_id` in your Telegram group to get the chat ID for reminders, add it to `.env`, and restart.
+
+If any of that is unfamiliar, the [detailed setup guide](#setup) below walks through every step.
+
+---
+
 ## What you'll need
 
 Before you start, make sure you have the following:

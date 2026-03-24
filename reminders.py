@@ -1,17 +1,20 @@
 """
 Proactive reminder jobs using APScheduler.
 
-Two jobs:
-  1. morning_summary  — sends today's events each morning at MORNING_REMINDER_TIME
+Built-in jobs:
+  1. morning_summary  — sends today's events each morning
   2. pre_event_check  — checks every 5 min for events about to start
 
-Reminders call the MCP server directly (no Claude) for reliability and cost.
+Custom reminders can be added/removed/updated at runtime via chat
+and are persisted to ~/.config/famlobster/reminders.json.
 """
 
 import json
 import logging
 import os
+import time
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -20,6 +23,13 @@ from mcp import ClientSession
 from telegram import Bot
 
 logger = logging.getLogger(__name__)
+
+REMINDERS_FILE = os.getenv(
+    "REMINDERS_FILE",
+    os.path.expanduser("~/.config/famlobster/reminders.json"),
+)
+
+BUILTIN_IDS = {"morning_summary", "pre_event_check"}
 
 
 def setup_scheduler(bot: Bot, mcp_session: ClientSession) -> AsyncIOScheduler:
@@ -55,11 +65,267 @@ def setup_scheduler(bot: Bot, mcp_session: ClientSession) -> AsyncIOScheduler:
     else:
         logger.warning(
             "REMINDER_CHAT_ID not set — morning summary and pre-event reminders disabled. "
-            "Send /get_id in your family group chat to find the chat ID."
+            "Send /get_id in your group chat to find the chat ID."
         )
+
+    # Load any custom reminders saved from previous runs
+    load_custom_reminders(scheduler, bot)
 
     scheduler.start()
     return scheduler
+
+
+# ------------------------------------------------------------------
+# Custom reminder management (runtime, persisted to JSON)
+# ------------------------------------------------------------------
+
+
+def _read_reminders_file() -> list[dict]:
+    """Read reminders from JSON file. Returns empty list if not found."""
+    path = Path(REMINDERS_FILE)
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Failed to read reminders file")
+        return []
+
+
+def _write_reminders_file(reminders: list[dict]) -> None:
+    """Write reminders list to JSON file."""
+    path = Path(REMINDERS_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(reminders, indent=2))
+
+
+def load_custom_reminders(scheduler: AsyncIOScheduler, bot: Bot) -> None:
+    """Load saved custom reminders and register them with the scheduler."""
+    reminders = _read_reminders_file()
+    tz = os.getenv("TIMEZONE", "America/Chicago")
+    for r in reminders:
+        if not r.get("enabled", True):
+            continue
+        try:
+            _register_job(scheduler, bot, r, tz)
+            logger.info("Restored custom reminder: %s", r["id"])
+        except Exception:
+            logger.exception("Failed to restore reminder %s", r.get("id"))
+
+
+def _register_job(
+    scheduler: AsyncIOScheduler, bot: Bot, reminder: dict, tz: str
+) -> None:
+    """Register a single custom reminder as an APScheduler job."""
+    schedule = reminder["schedule"]
+    if schedule["type"] == "cron":
+        trigger = CronTrigger(
+            hour=schedule["hour"],
+            minute=schedule["minute"],
+            day_of_week=schedule.get("day_of_week"),
+            timezone=tz,
+        )
+    elif schedule["type"] == "interval":
+        trigger = IntervalTrigger(minutes=schedule["interval_minutes"])
+    else:
+        raise ValueError(f"Unknown schedule type: {schedule['type']}")
+
+    scheduler.add_job(
+        send_custom_reminder,
+        trigger,
+        args=[bot, reminder["chat_id"], reminder["message"]],
+        id=reminder["id"],
+        name=reminder.get("message", "Custom reminder"),
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
+
+async def send_custom_reminder(bot: Bot, chat_id: int, message: str) -> None:
+    """Send a custom reminder message to the chat."""
+    try:
+        await bot.send_message(chat_id=chat_id, text=f"Reminder: {message}")
+    except Exception:
+        logger.exception("Failed to send custom reminder to chat %s", chat_id)
+
+
+def add_reminder(
+    scheduler: AsyncIOScheduler,
+    bot: Bot,
+    message: str,
+    hour: int,
+    minute: int,
+    chat_id: int,
+    day_of_week: str | None = None,
+    interval_minutes: int | None = None,
+) -> dict:
+    """Add a new custom reminder. Returns the reminder dict."""
+    reminder_id = f"reminder_{int(time.time())}"
+    tz = os.getenv("TIMEZONE", "America/Chicago")
+
+    if interval_minutes:
+        schedule = {"type": "interval", "interval_minutes": interval_minutes}
+    else:
+        schedule = {"type": "cron", "hour": hour, "minute": minute}
+        if day_of_week:
+            schedule["day_of_week"] = day_of_week
+
+    reminder = {
+        "id": reminder_id,
+        "chat_id": chat_id,
+        "message": message,
+        "schedule": schedule,
+        "enabled": True,
+    }
+
+    _register_job(scheduler, bot, reminder, tz)
+
+    reminders = _read_reminders_file()
+    reminders.append(reminder)
+    _write_reminders_file(reminders)
+
+    logger.info("Added custom reminder: %s", reminder_id)
+    return reminder
+
+
+def update_reminder(
+    scheduler: AsyncIOScheduler,
+    bot: Bot,
+    reminder_id: str,
+    message: str | None = None,
+    hour: int | None = None,
+    minute: int | None = None,
+    day_of_week: str | None = None,
+    enabled: bool | None = None,
+) -> dict:
+    """Update an existing reminder (built-in or custom). Returns updated info."""
+    tz = os.getenv("TIMEZONE", "America/Chicago")
+
+    # Handle built-in reminders
+    if reminder_id in BUILTIN_IDS:
+        job = scheduler.get_job(reminder_id)
+        if not job:
+            return {"error": f"Built-in reminder '{reminder_id}' is not active"}
+        if enabled is False:
+            scheduler.pause_job(reminder_id)
+            return {"status": "paused", "id": reminder_id}
+        if enabled is True:
+            scheduler.resume_job(reminder_id)
+        if hour is not None or minute is not None:
+            old_trigger = job.trigger
+            new_hour = hour if hour is not None else old_trigger.fields[5].expressions[0].first  # noqa: E501
+            new_minute = minute if minute is not None else old_trigger.fields[6].expressions[0].first  # noqa: E501
+            scheduler.reschedule_job(
+                reminder_id,
+                trigger=CronTrigger(hour=new_hour, minute=new_minute, timezone=tz),
+            )
+        return {"status": "updated", "id": reminder_id}
+
+    # Handle custom reminders
+    reminders = _read_reminders_file()
+    target = None
+    for r in reminders:
+        if r["id"] == reminder_id:
+            target = r
+            break
+    if not target:
+        return {"error": f"Reminder '{reminder_id}' not found"}
+
+    if message is not None:
+        target["message"] = message
+    if hour is not None:
+        target["schedule"]["hour"] = hour
+    if minute is not None:
+        target["schedule"]["minute"] = minute
+    if day_of_week is not None:
+        target["schedule"]["day_of_week"] = day_of_week
+    if enabled is not None:
+        target["enabled"] = enabled
+
+    _write_reminders_file(reminders)
+
+    # Re-register or remove from scheduler
+    try:
+        scheduler.remove_job(reminder_id)
+    except Exception:
+        pass
+    if target.get("enabled", True):
+        _register_job(scheduler, bot, target, tz)
+
+    logger.info("Updated custom reminder: %s", reminder_id)
+    return {"status": "updated", "id": reminder_id}
+
+
+def remove_reminder(scheduler: AsyncIOScheduler, reminder_id: str) -> dict:
+    """Remove a custom reminder. Built-in reminders cannot be removed (disable instead)."""
+    if reminder_id in BUILTIN_IDS:
+        return {
+            "error": f"Cannot remove built-in reminder '{reminder_id}'. "
+            "Use update_reminder with enabled=false to disable it."
+        }
+
+    reminders = _read_reminders_file()
+    found = False
+    reminders = [r for r in reminders if r["id"] != reminder_id or not (found := True)]  # noqa: F841
+    if not found:
+        # Try matching by message substring
+        for r in _read_reminders_file():
+            if reminder_id.lower() in r.get("message", "").lower():
+                reminder_id = r["id"]
+                reminders = [x for x in _read_reminders_file() if x["id"] != reminder_id]
+                found = True
+                break
+    if not found:
+        return {"error": f"Reminder '{reminder_id}' not found"}
+
+    _write_reminders_file(reminders)
+    try:
+        scheduler.remove_job(reminder_id)
+    except Exception:
+        pass
+
+    logger.info("Removed custom reminder: %s", reminder_id)
+    return {"status": "removed", "id": reminder_id}
+
+
+def get_all_reminders(scheduler: AsyncIOScheduler) -> list[dict]:
+    """Return info about all active scheduled jobs."""
+    jobs = scheduler.get_jobs()
+    result = []
+    for job in jobs:
+        info = {
+            "id": job.id,
+            "name": job.name,
+            "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
+            "paused": job.next_run_time is None,
+        }
+        # Extract schedule details from trigger
+        if isinstance(job.trigger, CronTrigger):
+            info["type"] = "cron"
+        elif isinstance(job.trigger, IntervalTrigger):
+            info["type"] = "interval"
+            info["interval_seconds"] = int(job.trigger.interval.total_seconds())
+        result.append(info)
+
+    # Also include disabled custom reminders from the file
+    file_reminders = _read_reminders_file()
+    active_ids = {j.id for j in jobs}
+    for r in file_reminders:
+        if r["id"] not in active_ids:
+            result.append({
+                "id": r["id"],
+                "name": r.get("message", ""),
+                "next_run": None,
+                "paused": True,
+                "type": r["schedule"]["type"],
+            })
+
+    return result
+
+
+# ------------------------------------------------------------------
+# Built-in reminder functions
+# ------------------------------------------------------------------
 
 
 async def send_morning_summary(

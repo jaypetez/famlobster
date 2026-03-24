@@ -147,15 +147,21 @@ async def post_init(application: Application) -> None:
     mcp_session = application.bot_data["mcp_session"]
     logger.info("MCP calendar server ready")
 
-    # Create and configure the agent
-    agent = FamilyAgent(mcp_session)
+    # Start the reminder scheduler (before agent, so we can pass it in)
+    scheduler = setup_scheduler(application.bot, mcp_session)
+    application.bot_data["scheduler"] = scheduler
+
+    # Create and configure the agent with scheduler access for reminder tools
+    reminder_chat_id = os.getenv("REMINDER_CHAT_ID")
+    agent = FamilyAgent(
+        mcp_session,
+        scheduler=scheduler,
+        bot=application.bot,
+        reminder_chat_id=int(reminder_chat_id) if reminder_chat_id else None,
+    )
     await agent.load_tools()
     application.bot_data["agent"] = agent
     logger.info("FamilyAgent ready with %d tools", len(agent.tools))
-
-    # Start the reminder scheduler
-    scheduler = setup_scheduler(application.bot, mcp_session)
-    application.bot_data["scheduler"] = scheduler
 
     logger.info("FamLobster is ready!")
 

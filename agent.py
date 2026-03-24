@@ -18,7 +18,13 @@ logger = logging.getLogger(__name__)
 MAX_HISTORY_TURNS = 20  # max user+assistant pairs to keep per chat
 
 SYSTEM_PROMPT = """You are FamLobster, a friendly personal assistant bot that manages \
-a Google Calendar and can send email. Today is {today}. The timezone is {timezone}.
+a Google Calendar, sends email, and manages task lists. Today is {today}. The timezone \
+is {timezone}.
+
+You have two task lists: "Groceries" for shopping items and "To-Do" for general tasks. \
+When a user mentions adding groceries, food items, or things to buy, use the Groceries \
+list. For everything else (chores, reminders, errands), use the To-Do list. The user \
+does not need to specify which list — figure it out from context.
 
 Help users view, add, edit, and delete calendar events using natural language. \
 Keep responses concise and friendly.
@@ -26,7 +32,7 @@ Keep responses concise and friendly.
 When listing events, format them clearly with day, date, time, and title.
 When creating events, confirm the details back to the user after saving.
 When you're unsure about a date or time, ask for clarification before acting.
-If a calendar operation fails, explain what went wrong in plain English."""
+If an operation fails, explain what went wrong in plain English."""
 
 
 class FamilyAgent:
@@ -49,7 +55,7 @@ class FamilyAgent:
             }
             for tool in result.tools
         ]
-        logger.info("Loaded %d calendar tools from MCP server", len(self.tools))
+        logger.info("Loaded %d tools from MCP server", len(self.tools))
 
     def clear_history(self, chat_id: int) -> None:
         self.conversation_history.pop(chat_id, None)

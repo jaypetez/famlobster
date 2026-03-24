@@ -1,12 +1,10 @@
 """
-MCP server wrapping Google Calendar and Gmail APIs.
+MCP server wrapping Google Calendar, Gmail, and Google Tasks APIs.
 
-Exposes five tools to Claude:
-  - list_events
-  - create_event
-  - update_event
-  - delete_event
+Exposes ten tools to Claude:
+  - list_events, create_event, update_event, delete_event
   - send_email
+  - list_tasks, add_tasks, complete_task, delete_task, clear_completed
 """
 
 import asyncio
@@ -28,6 +26,7 @@ import mcp.types as types
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/tasks",
 ]
 
 
@@ -35,6 +34,7 @@ class CalendarServer:
     def __init__(self):
         self.service = None
         self.gmail = None
+        self.tasks = None
         self.calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
         self.server = Server("famlobster-calendar")
         self._register_tools()
@@ -69,6 +69,7 @@ class CalendarServer:
 
         self.service = build("calendar", "v3", credentials=creds)
         self.gmail = build("gmail", "v1", credentials=creds)
+        self.tasks = build("tasks", "v1", credentials=creds)
 
     # ------------------------------------------------------------------
     # Tool helpers
@@ -187,7 +188,7 @@ class CalendarServer:
                 ),
                 types.Tool(
                     name="send_email",
-                    description="Send an email from the family Gmail account.",
+                    description="Send an email via Gmail.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -205,6 +206,89 @@ class CalendarServer:
                             },
                         },
                         "required": ["to", "subject", "body"],
+                    },
+                ),
+                types.Tool(
+                    name="list_tasks",
+                    description="List incomplete tasks from a task list. Use list_name 'Groceries' for shopping items or 'To-Do' for general tasks.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "list_name": {
+                                "type": "string",
+                                "description": "Name of the task list (e.g. 'Groceries' or 'To-Do')",
+                            },
+                        },
+                        "required": ["list_name"],
+                    },
+                ),
+                types.Tool(
+                    name="add_tasks",
+                    description="Add one or more tasks to a task list. Use list_name 'Groceries' for shopping items or 'To-Do' for general tasks.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "list_name": {
+                                "type": "string",
+                                "description": "Name of the task list (e.g. 'Groceries' or 'To-Do')",
+                            },
+                            "items": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of task titles to add",
+                            },
+                        },
+                        "required": ["list_name", "items"],
+                    },
+                ),
+                types.Tool(
+                    name="complete_task",
+                    description="Mark a task as completed by its title (case-insensitive partial match).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "list_name": {
+                                "type": "string",
+                                "description": "Name of the task list",
+                            },
+                            "task_title": {
+                                "type": "string",
+                                "description": "Title (or partial title) of the task to complete",
+                            },
+                        },
+                        "required": ["list_name", "task_title"],
+                    },
+                ),
+                types.Tool(
+                    name="delete_task",
+                    description="Delete a task entirely by its title (case-insensitive partial match).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "list_name": {
+                                "type": "string",
+                                "description": "Name of the task list",
+                            },
+                            "task_title": {
+                                "type": "string",
+                                "description": "Title (or partial title) of the task to delete",
+                            },
+                        },
+                        "required": ["list_name", "task_title"],
+                    },
+                ),
+                types.Tool(
+                    name="clear_completed",
+                    description="Remove all completed tasks from a task list.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "list_name": {
+                                "type": "string",
+                                "description": "Name of the task list",
+                            },
+                        },
+                        "required": ["list_name"],
                     },
                 ),
             ]
@@ -235,19 +319,23 @@ class CalendarServer:
                 return [types.TextContent(type="text", text=json.dumps(error))]
 
     def _dispatch(self, name: str, args: dict) -> dict | list:
-        """Synchronous dispatch to the appropriate Google Calendar API call."""
-        if name == "list_events":
-            return self._list_events(args)
-        elif name == "create_event":
-            return self._create_event(args)
-        elif name == "update_event":
-            return self._update_event(args)
-        elif name == "delete_event":
-            return self._delete_event(args)
-        elif name == "send_email":
-            return self._send_email(args)
-        else:
-            return {"error": f"Unknown tool: {name}"}
+        """Synchronous dispatch to the appropriate API call."""
+        dispatch = {
+            "list_events": self._list_events,
+            "create_event": self._create_event,
+            "update_event": self._update_event,
+            "delete_event": self._delete_event,
+            "send_email": self._send_email,
+            "list_tasks": self._list_tasks,
+            "add_tasks": self._add_tasks,
+            "complete_task": self._complete_task,
+            "delete_task": self._delete_task,
+            "clear_completed": self._clear_completed,
+        }
+        handler = dispatch.get(name)
+        if handler:
+            return handler(args)
+        return {"error": f"Unknown tool: {name}"}
 
     # ------------------------------------------------------------------
     # Google Calendar operations (synchronous, run in executor)
@@ -358,6 +446,79 @@ class CalendarServer:
             userId="me", body={"raw": raw}
         ).execute()
         return {"status": "sent", "message_id": result.get("id")}
+
+    # ------------------------------------------------------------------
+    # Google Tasks operations (synchronous, run in executor)
+    # ------------------------------------------------------------------
+
+    def _get_or_create_task_list(self, list_name: str) -> str:
+        """Find a task list by name, or create it. Returns the list ID."""
+        result = self.tasks.tasklists().list().execute()
+        for tl in result.get("items", []):
+            if tl["title"].lower() == list_name.lower():
+                return tl["id"]
+        # Create it
+        new_list = self.tasks.tasklists().insert(
+            body={"title": list_name}
+        ).execute()
+        return new_list["id"]
+
+    def _find_task_by_title(self, list_id: str, title: str) -> dict | None:
+        """Find the first incomplete task matching title (case-insensitive partial match)."""
+        result = self.tasks.tasks().list(
+            tasklist=list_id, showCompleted=False
+        ).execute()
+        title_lower = title.lower()
+        for task in result.get("items", []):
+            if title_lower in task.get("title", "").lower():
+                return task
+        return None
+
+    def _list_tasks(self, args: dict) -> list:
+        list_id = self._get_or_create_task_list(args["list_name"])
+        result = self.tasks.tasks().list(
+            tasklist=list_id, showCompleted=False
+        ).execute()
+        return [
+            {"title": t.get("title", ""), "status": t.get("status", "")}
+            for t in result.get("items", [])
+        ]
+
+    def _add_tasks(self, args: dict) -> dict:
+        list_id = self._get_or_create_task_list(args["list_name"])
+        added = []
+        for item in args["items"]:
+            task = self.tasks.tasks().insert(
+                tasklist=list_id, body={"title": item}
+            ).execute()
+            added.append(task.get("title", ""))
+        return {"status": "added", "items": added, "list": args["list_name"]}
+
+    def _complete_task(self, args: dict) -> dict:
+        list_id = self._get_or_create_task_list(args["list_name"])
+        task = self._find_task_by_title(list_id, args["task_title"])
+        if not task:
+            return {"error": f"No task matching '{args['task_title']}' found in {args['list_name']}"}
+        task["status"] = "completed"
+        self.tasks.tasks().update(
+            tasklist=list_id, task=task["id"], body=task
+        ).execute()
+        return {"status": "completed", "title": task["title"]}
+
+    def _delete_task(self, args: dict) -> dict:
+        list_id = self._get_or_create_task_list(args["list_name"])
+        task = self._find_task_by_title(list_id, args["task_title"])
+        if not task:
+            return {"error": f"No task matching '{args['task_title']}' found in {args['list_name']}"}
+        self.tasks.tasks().delete(
+            tasklist=list_id, task=task["id"]
+        ).execute()
+        return {"status": "deleted", "title": task["title"]}
+
+    def _clear_completed(self, args: dict) -> dict:
+        list_id = self._get_or_create_task_list(args["list_name"])
+        self.tasks.tasks().clear(tasklist=list_id).execute()
+        return {"status": "cleared", "list": args["list_name"]}
 
 
 if __name__ == "__main__":

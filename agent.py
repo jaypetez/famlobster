@@ -57,15 +57,28 @@ class FamilyAgent:
     async def process_message(self, chat_id: int, user_text: str) -> str:
         """Main entry point — append user message to history, run tool loop, return reply."""
         history = self.conversation_history.setdefault(chat_id, [])
+
+        # Snapshot length BEFORE adding anything so we can fully restore on error
+        snapshot_len = len(history)
+
         history.append({"role": "user", "content": user_text})
         self._trim_history(history)
 
         try:
             reply = await self._run_tool_loop(chat_id)
-        except Exception as e:
+        except anthropic.BadRequestError as e:
+            # History is corrupted (mismatched tool_use/tool_result). Clear it
+            # entirely and tell the user so they can just repeat their message.
+            logger.error("Corrupted history for chat %d, clearing: %s", chat_id, e)
+            self.clear_history(chat_id)
+            return (
+                "I hit a conversation error and had to reset. "
+                "Sorry about that — please send your message again."
+            )
+        except Exception:
             logger.exception("Error in tool loop for chat %d", chat_id)
-            # Remove the failed user message so the user can retry cleanly
-            history.pop()
+            # Restore history to exactly where it was before this request
+            del history[snapshot_len:]
             raise
 
         return reply

@@ -1,30 +1,20 @@
-# FamLobster
+<p align="center">
+  <img src="docs/assets/famlobster-logo.svg" alt="FamLobster" width="400">
+</p>
 
-```
-    /\/\                         /\/\
-   /    \                       /    \
-  /  ()  \---------------------/  ()  \
- (   __   )                   (   __   )
-  \      / \                 / \      /
-   \    /   \               /   \    /
-    \--/ /\  \             /  /\ \--/
-        /  \  \           /  /  \
-       / () \  `---------'  / () \
-      /  --  \             /  --  \
-     /________\___________/________\
-    |                               |
-    |   F  A  M  L  O  B  S  T  E  R   |
-    |_______________________________|
-                  | |
-                  | |
-               ___| |___
-              /    |    \
-             /     |     \
-            (______|______)
-```
+<p align="center">
+  <strong>Your family's calendar assistant, right in Telegram.</strong>
+</p>
 
-A family Telegram bot that manages your Google Calendar and sends email using
-natural language. Powered by Claude AI and the Model Context Protocol (MCP).
+<p align="center">
+  <a href="#setup"><img src="https://img.shields.io/badge/Setup_Guide-blue?style=for-the-badge" alt="Setup Guide"></a>
+  <a href="FEATURES.md"><img src="https://img.shields.io/badge/Feature_Roadmap-orange?style=for-the-badge" alt="Feature Roadmap"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License"></a>
+</p>
+
+---
+
+A family Telegram bot that manages your Google Calendar and sends email using natural language. Powered by Claude AI and the Model Context Protocol (MCP).
 
 Just text the bot like you'd text a family member:
 - "What's on the calendar this week?"
@@ -32,8 +22,7 @@ Just text the bot like you'd text a family member:
 - "Move Tuesday's dentist appointment to Thursday at 2pm"
 - "Email grandma that the kids have a recital on Saturday"
 
-The bot also sends a **morning summary** of the day's events and **pre-event reminders**
-so nobody misses anything.
+The bot also sends a **morning summary** of the day's events and **pre-event reminders** so nobody misses anything.
 
 ---
 

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Your family's calendar assistant, right in Telegram.</strong>
+  <strong>A personal Telegram assistant powered by Claude AI.</strong>
 </p>
 
 <p align="center">
@@ -14,15 +14,15 @@
 
 ---
 
-A family Telegram bot that manages your Google Calendar and sends email using natural language. Powered by Claude AI and the Model Context Protocol (MCP).
+A Telegram bot that manages your Google Calendar, sends email, and more — all through natural language. Powered by Claude AI and the Model Context Protocol (MCP).
 
-Just text the bot like you'd text a family member:
+Just text the bot like you'd text a person:
 - "What's on the calendar this week?"
 - "Add soccer practice tomorrow at 4:30pm"
 - "Move Tuesday's dentist appointment to Thursday at 2pm"
 - "Email grandma that the kids have a recital on Saturday"
 
-The bot also sends a **morning summary** of the day's events and **pre-event reminders** so nobody misses anything.
+The bot also sends a **morning summary** of the day's events and **pre-event reminders** so you never miss anything. Built for families, small teams, or anyone who wants a personal AI assistant in Telegram.
 
 ---
 

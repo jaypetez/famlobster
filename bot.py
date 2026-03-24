@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Hi! I'm FamLobster, your family calendar assistant.\n\n"
+        "Hi! I'm FamLobster, your personal assistant.\n\n"
         "Just talk to me naturally — try things like:\n"
         '• "What\'s on the calendar this week?"\n'
         '• "Add soccer practice tomorrow at 4:30pm"\n'

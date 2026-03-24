@@ -1,5 +1,28 @@
 # FamLobster
 
+```
+    /\/\                         /\/\
+   /    \                       /    \
+  /  ()  \---------------------/  ()  \
+ (   __   )                   (   __   )
+  \      / \                 / \      /
+   \    /   \               /   \    /
+    \--/ /\  \             /  /\ \--/
+        /  \  \           /  /  \
+       / () \  `---------'  / () \
+      /  --  \             /  --  \
+     /________\___________/________\
+    |                               |
+    |   F  A  M  L  O  B  S  T  E  R   |
+    |_______________________________|
+                  | |
+                  | |
+               ___| |___
+              /    |    \
+             /     |     \
+            (______|______)
+```
+
 A family Telegram bot that manages your Google Calendar using natural language, powered by Claude Haiku and the Model Context Protocol (MCP).
 
 **Example messages:**

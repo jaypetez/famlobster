@@ -14,13 +14,29 @@
 
 ---
 
-A Telegram bot that manages your Google Calendar, sends email, and more — all through natural language. Powered by Claude AI and the Model Context Protocol (MCP).
+A Telegram bot that manages your Google Calendar, sends email, tracks grocery/to-do lists, and handles scheduled reminders — all through natural language. Powered by Claude AI and the Model Context Protocol (MCP).
 
 Just text the bot like you'd text a person:
+
+**Calendar**
 - "What's on the calendar this week?"
 - "Add soccer practice tomorrow at 4:30pm"
 - "Move Tuesday's dentist appointment to Thursday at 2pm"
+
+**Email**
 - "Email grandma that the kids have a recital on Saturday"
+
+**Grocery & to-do lists** *(Google Tasks)*
+- "Add milk, eggs, and bread to the grocery list"
+- "What do we need from the store?"
+- "Got the eggs" / "Mark eggs as done"
+- "Remind me to call the plumber" *(goes to To-Do list)*
+
+**Scheduled reminders**
+- "Remind me every Sunday at 5pm to prep lunches"
+- "What reminders are set up?"
+- "Change the morning summary to 6:30am"
+- "Disable pre-event reminders"
 
 The bot also sends a **morning summary** of the day's events and **pre-event reminders** so you never miss anything. Built for families, small teams, or anyone who wants a personal AI assistant in Telegram.
 
@@ -42,7 +58,7 @@ cp .env.example ~/.config/famlobster/.env
 # Edit ~/.config/famlobster/.env with your Telegram bot token, Anthropic API key, etc.
 
 # 3. Google OAuth (needs a browser — run on your laptop if server is headless)
-# Enable Calendar API + Gmail API in Google Cloud Console
+# Enable Calendar API + Gmail API + Tasks API in Google Cloud Console
 # Create OAuth Desktop credentials, download as credentials.json
 python auth.py
 mv token.json ~/.config/famlobster/token.json
@@ -109,17 +125,18 @@ All sensitive files go here — never inside the repo folder.
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project (e.g., "FamLobster")
 2. Navigate to **APIs & Services → Library**, search for **Google Calendar API**, and enable it
 3. In the same Library, search for **Gmail API** and enable it
-4. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-5. Set application type to **Desktop app**, give it any name, then click **Create**
-6. Click the download icon to download the JSON file
-7. Save it to your secrets directory — **not inside the repo**:
+4. In the same Library, search for **Tasks API** and enable it
+5. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+6. Set application type to **Desktop app**, give it any name, then click **Create**
+7. Click the download icon to download the JSON file
+8. Save it to your secrets directory — **not inside the repo**:
    ```bash
    mv ~/Downloads/client_secret_*.json ~/.config/famlobster/credentials.json
    ```
-8. Go to **APIs & Services → OAuth consent screen**:
+9. Go to **APIs & Services → OAuth consent screen**:
    - If using a personal Google account: set to **External**, add your email as a test user
    - If using Google Workspace: set to **Internal**
-9. **Important:** After setting up the consent screen, click **Publish App** on the same page. If you skip this, Google will expire your login token every 7 days and you'll have to re-authorize weekly. Publishing just removes that limit — your app is still private and only accessible to the test users you added. You do not need Google's verification for a personal app.
+10. **Important:** After setting up the consent screen, click **Publish App** on the same page. If you skip this, Google will expire your login token every 7 days and you'll have to re-authorize weekly. Publishing just removes that limit — your app is still private and only accessible to the test users you added. You do not need Google's verification for a personal app.
 
 ### 5. Configure environment
 
@@ -250,6 +267,18 @@ sudo journalctl -u famlobster -f   # view logs
 | `/get_id` | Show the current chat's ID (for `REMINDER_CHAT_ID`) |
 
 Everything else is natural language — just talk to the bot.
+
+### What the bot can do
+
+| Feature | How it works |
+|---------|-------------|
+| **Calendar** | View, add, edit, delete Google Calendar events |
+| **Email** | Send emails via Gmail |
+| **Grocery list** | Add/remove/check off items on a shared Google Tasks list |
+| **To-do list** | General tasks and chores on a separate Google Tasks list |
+| **Scheduled reminders** | Create, update, and remove recurring reminders through chat — persisted to `~/.config/famlobster/reminders.json` |
+| **Morning summary** | Automatic daily briefing of today's calendar events |
+| **Pre-event alerts** | Heads-up notification before events start |
 
 ---
 

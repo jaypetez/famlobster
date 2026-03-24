@@ -9,7 +9,7 @@ Usage:
     python auth.py
 
 Then copy token.json to your server:
-    scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+    scp token.json youruser@yourserver:~/.config/famlobster/token.json
 """
 
 import json
@@ -47,7 +47,7 @@ def main():
 
     print(f"\nSaved {output}")
     print("\nNow copy it to your server:")
-    print(f"    scp {output} famlobster@yourserver:~/.config/famlobster/token.json")
+    print(f"    scp {output} youruser@yourserver:~/.config/famlobster/token.json")
     print("\nThen run the bot on the server — no browser needed from here on.")
 
 if __name__ == "__main__":

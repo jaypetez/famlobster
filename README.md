@@ -119,27 +119,52 @@ Edit `~/.config/famlobster/.env` and fill in:
   ```
 - Leave `REMINDER_CHAT_ID` blank for now (see step 7)
 
-### 6. Authorize Google Calendar (run once on your laptop)
+### 6. Authorize Google (one-time setup)
 
-The bot runs headlessly on the server, so you generate the auth token on your **Windows laptop** where a browser is available, then copy it to the server. You only ever do this once.
+Google OAuth requires a browser to sign in. If your server has a desktop environment with a browser, you can run `auth.py` directly on it. If your server is headless (SSH-only, no GUI), you'll generate the token on any computer that has a browser and then copy it to the server.
 
-**On your laptop:**
+#### Option A: Server has a desktop / browser
+
+If you're running the bot on a machine with a graphical desktop (Ubuntu Desktop, macOS, Windows, etc.):
+
+```bash
+cd famlobster
+source .venv/bin/activate
+python auth.py
+```
+
+- It will ask for the path to your `credentials.json`
+- A browser opens — sign in with the Google account that owns the family calendar
+- Click through any "unverified app" warnings → Allow
+- Move the generated `token.json` to your secrets directory:
+  ```bash
+  mv token.json ~/.config/famlobster/token.json
+  ```
+
+#### Option B: Server is headless (SSH-only, no browser)
+
+If you SSH into your server (e.g., a Raspberry Pi, a VPS, PuTTY from Windows), the browser can't open there. Instead, run `auth.py` on any computer that has a browser — your Windows laptop, Mac, Linux desktop, whatever — and then copy the token to the server.
+
+**On the computer with a browser:**
 
 ```bash
 pip install google-auth-oauthlib
 python auth.py
 ```
 
-- It will ask for the path to your `credentials.json` (the file you downloaded from Google Cloud)
-- A browser opens — sign in with the Google account that owns the family calendar
-- Click through any "unverified app" warnings → Allow
+- Point it to your `credentials.json` (the file you downloaded from Google Cloud)
+- A browser opens — sign in and authorize
 - `token.json` is saved in the current folder
 
 **Copy it to the server:**
 
 ```bash
-scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+scp token.json youruser@yourserver:~/.config/famlobster/token.json
 ```
+
+Replace `youruser@yourserver` with your actual SSH login (e.g., `pi@192.168.1.50`).
+
+---
 
 The token auto-refreshes silently — you'll never need to do this again unless you revoke access in your Google account settings.
 
@@ -221,14 +246,14 @@ This happens when your OAuth app is still in "Testing" mode. Google limits refre
 Re-run `auth.py` on your laptop and SCP the new `token.json` to the server:
 ```bash
 python auth.py
-scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+scp token.json youruser@yourserver:~/.config/famlobster/token.json
 ```
 
 **"token.json not found"**
-You need to run `auth.py` on your laptop first — see the setup steps above.
+You need to run `auth.py` on a computer with a browser first — see step 6 above.
 
 **"credentials.json not found"**
-Check that `GOOGLE_CREDENTIALS_FILE` in your `.env` points to the correct absolute path (e.g., `/home/famlobster/.config/famlobster/credentials.json`).
+Check that `GOOGLE_CREDENTIALS_FILE` in your `.env` points to the correct absolute path (e.g., `/home/youruser/.config/famlobster/credentials.json`).
 
 **Bot says "there's a technical issue with the calendar" or can't read/write events**
 The Google Calendar API is probably not enabled in your Google Cloud project:
@@ -239,7 +264,7 @@ The Google Calendar API is probably not enabled in your Google Cloud project:
 If it's already enabled, your token.json may have been generated before the API was enabled. Re-run `auth.py` on your laptop to get a fresh token:
 ```bash
 python auth.py
-scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+scp token.json youruser@yourserver:~/.config/famlobster/token.json
 ```
 
 **"This app isn't verified" warning on the Google auth page**
@@ -281,7 +306,7 @@ Two things to check:
 2. Your token.json must include the Gmail scope — re-run `auth.py` on your laptop (it will ask you to approve Gmail Send permission) and SCP the new token to the server:
    ```bash
    python auth.py
-   scp token.json famlobster@yourserver:~/.config/famlobster/token.json
+   scp token.json youruser@yourserver:~/.config/famlobster/token.json
    ```
 
 **Adding Gmail to an existing setup (already had Calendar working)**

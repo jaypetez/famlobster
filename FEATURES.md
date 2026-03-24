@@ -4,42 +4,54 @@ Ideas for future bot capabilities, roughly ordered by usefulness and ease of imp
 
 ---
 
-## 🛒 Grocery & Shopping Lists
-**Difficulty:** Easy
-**Backend:** Google Tasks API or a Google Sheet
-
-Family members can add, view, and check off items from a shared grocery list. Claude understands natural language so "we're out of milk and we need more cereal" just works.
-
-**Example messages:**
-- "Add milk, eggs, and cereal to the grocery list"
-- "What's on the grocery list?"
-- "Remove eggs, I already got them"
-- "Clear the list, we did the shopping"
-
-**Implementation notes:**
-- Google Tasks API is the simplest option — free, no extra setup, already in the OAuth scope family
-- One task list named "Groceries" acts as the shared list
-- Add `tasks` scope to `auth.py` and a `GoogleTasksService` alongside the calendar
-- Tools needed: `list_tasks`, `add_task`, `complete_task`, `clear_completed_tasks`
-- Could also use a Google Sheet if you want a persistent history of past lists
-
----
-
-## 📋 Family To-Do / Chores
+## 🛒 Grocery & Shopping Lists + 📋 Family To-Do
 **Difficulty:** Easy
 **Backend:** Google Tasks API
 
-Assign tasks to family members and track completion. Could have separate task lists per person or a single shared "Family Chores" list.
+A unified task system using Google Tasks. Two default lists — **Groceries** for shopping and **To-Do** for everything else. Claude figures out which list you mean from context, so you never have to say "grocery list" or "to-do list" explicitly.
 
-**Example messages:**
-- "Add 'mow the lawn' to Alex's chore list"
-- "What chores are still pending?"
+**Example grocery messages:**
+- "Add milk, eggs, and bread to the grocery list"
+- "We're out of milk and we need more cereal"
+- "What do we need from the store?"
+- "Got the eggs" → marks eggs as done
+- "Add stuff for tacos" → Claude adds tortillas, ground beef, cheese, salsa, etc.
+- "Clear the grocery list, we did the shopping"
+
+**Example to-do / chore messages:**
+- "Remind me to call the plumber"
+- "Add 'sign the permission slip' to the list"
+- "What needs to get done?"
 - "Mark 'take out trash' as done"
-- "What does everyone have to do this week?"
+- "We need to RSVP for the party by Friday"
 
-**Implementation notes:**
-- Same Google Tasks API as grocery lists — separate task lists per person
-- Can be added alongside grocery list in the same implementation pass
+**How Claude routes it:**
+Users just talk naturally — Claude decides which list and which action:
+- "Add milk" → `add_tasks(list="Groceries", items=["milk"])`
+- "I need to call the vet" → `add_tasks(list="To-Do", items=["Call the vet"])`
+- "Got the eggs" → `complete_task(list="Groceries", title="eggs")`
+- "What do we need from the store?" → `list_tasks(list="Groceries")`
+
+**MCP tools needed (5):**
+
+| Tool | Description |
+|------|-------------|
+| `list_tasks(list_name)` | Get all incomplete items from a list |
+| `add_tasks(list_name, items[])` | Add one or more items |
+| `complete_task(list_name, task_title)` | Mark an item as done |
+| `delete_task(list_name, task_title)` | Remove an item entirely |
+| `clear_completed(list_name)` | Clean up finished items |
+
+**Setup required:**
+- Enable **Google Tasks API** in Google Cloud Console (same project as Calendar)
+- Add `https://www.googleapis.com/auth/tasks` scope to `auth.py` and `calendar_server.py`
+- Re-run `auth.py` on your laptop to get a new token with the Tasks scope (same process as when Gmail was added)
+- Update system prompt in `agent.py` so Claude knows about the lists
+
+**Limitations:**
+- Google Tasks doesn't support assignees — the bot puts the person's name in the task title as a workaround ("Mow the lawn (Alex)")
+- No push notifications from Google Tasks — if you want a due-date reminder, the bot can create a calendar event instead
+- Start with two lists (Groceries, To-Do); multiple custom lists add complexity without much benefit
 
 ---
 

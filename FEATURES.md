@@ -32,7 +32,7 @@ Family members can add, view, and check off items from a shared grocery list. Cl
 Assign tasks to family members and track completion. Could have separate task lists per person or a single shared "Family Chores" list.
 
 **Example messages:**
-- "Add 'mow the lawn' to Jude's chore list"
+- "Add 'mow the lawn' to Alex's chore list"
 - "What chores are still pending?"
 - "Mark 'take out trash' as done"
 - "What does everyone have to do this week?"
@@ -47,7 +47,7 @@ Assign tasks to family members and track completion. Could have separate task li
 **Difficulty:** Easy
 **Backend:** Open-Meteo API (free, no API key needed)
 
-When someone asks about an event or a day, the bot can automatically include a weather forecast. Especially useful for outdoor events like Jude's baseball games.
+When someone asks about an event or a day, the bot can automatically include a weather forecast. Especially useful for outdoor events like weekend baseball games.
 
 **Example messages:**
 - "What's the weather like for Saturday's game?"
@@ -58,12 +58,12 @@ When someone asks about an event or a day, the bot can automatically include a w
 
 **How it works with calendar:**
 When you ask about an event, Claude automatically calls both `list_events` and `get_weather` and combines the answer:
-> "Jude's baseball practice is Saturday at 4:30pm. Weather looks good — sunny, 68°F, no rain. Light wind from the west."
+> "Baseball practice is Saturday at 4:30pm. Weather looks good — sunny, 68°F, no rain. Light wind from the west."
 
 The morning summary can also include weather for outdoor events automatically:
 > "Good morning! Today's events:
 > • Baseball practice at 4:30pm — sunny, 72°F, perfect for a game
-> • Dentist at 2pm"
+> • Dentist appointment at 2pm"
 
 **Implementation notes:**
 - Open-Meteo is completely free with no API key — just an HTTP call with lat/lon
@@ -123,14 +123,14 @@ A family status board. No GPS or tracking — family members post their status a
 - "I'm leaving school now"
 - "Heading to practice, back at 6"
 - "Running 20 min late"
-- "Where's Jude?" → "Jude said he was leaving school — 22 minutes ago"
+- "Where's Alex?" → "Alex said he was leaving school — 22 minutes ago"
 - "Where is everyone?" → Bot replies with each person's last check-in and timestamp
 
 **Optional: Telegram native location sharing**
-If a family member shares their live location in the chat, the bot can log it as a check-in ("Jude is near Lincoln Middle School"). Opt-in only — no automatic tracking.
+If a family member shares their live location in the chat, the bot can log it as a check-in ("Alex is near the school"). Opt-in only — no automatic tracking.
 
 **Optional: Expected check-in alerts**
-Set a deadline for someone to check in: "remind me if Jude hasn't checked in by 3:30pm." The bot pings the group if the check-in never comes.
+Set a deadline for someone to check in: "remind me if Alex hasn't checked in by 3:30pm." The bot pings the group if the check-in never comes.
 
 **Implementation notes:**
 - In-memory dict keyed by Telegram username: `{name: {status, timestamp}}`
@@ -151,7 +151,7 @@ Log family expenses by category and get summaries. Useful for tracking how much 
 - "Log $47 at Costco under groceries"
 - "How much have we spent on groceries this month?"
 - "Show me this month's spending by category"
-- "We spent $120 on Jude's baseball gear"
+- "We spent $120 on baseball gear"
 
 **Implementation notes:**
 - Google Sheets as the ledger — one row per expense, columns for date/amount/category/note

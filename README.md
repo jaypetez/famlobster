@@ -28,7 +28,7 @@ natural language. Powered by Claude AI and the Model Context Protocol (MCP).
 
 Just text the bot like you'd text a family member:
 - "What's on the calendar this week?"
-- "Add Jude's baseball game tomorrow at 4:30pm"
+- "Add soccer practice tomorrow at 4:30pm"
 - "Move Tuesday's dentist appointment to Thursday at 2pm"
 - "Email grandma that the kids have a recital on Saturday"
 

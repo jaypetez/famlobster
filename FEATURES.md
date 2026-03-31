@@ -4,9 +4,9 @@ Ideas for future bot capabilities, roughly ordered by usefulness and ease of imp
 
 ---
 
-## ~~🛒 Grocery & Shopping Lists + 📋 Family To-Do~~ ✅ Done
+## ~~🛒 Task Lists (Groceries, To-Do, and More)~~ ✅ Done
 
-**Status:** Shipped — Google Tasks integration with two default lists (Groceries, To-Do). Five MCP tools: `list_tasks`, `add_tasks`, `complete_task`, `delete_task`, `clear_completed`. Claude auto-routes between lists based on context.
+**Status:** Shipped — Google Tasks integration with unlimited named lists. Create store-specific grocery lists (Costco, Trader Joe's), project lists, to-do lists, or any topic-based list through natural language. Eight MCP tools: `list_task_lists`, `list_tasks`, `add_tasks`, `complete_task`, `delete_task`, `clear_completed`, `delete_task_list`, `rename_task_list`. Lists are auto-created when you add tasks to a new name.
 
 ---
 
@@ -188,7 +188,7 @@ A place to store frequently referenced info: wifi password, alarm code, vet's ph
 
 | # | Feature | Status |
 |---|---------|--------|
-| 1 | Grocery & shopping lists + to-do | ✅ Done |
+| 1 | Task lists (groceries, to-do, and more) | ✅ Done |
 | 2 | Scheduled reminders | ✅ Done |
 | 3 | Weather | 🔜 Next |
 | 4 | Birthday reminders | Planned — reuses existing calendar tools |

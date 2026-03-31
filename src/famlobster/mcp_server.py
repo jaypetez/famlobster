@@ -1,10 +1,11 @@
 """
 MCP server wrapping Google Calendar, Gmail, and Google Tasks APIs.
 
-Exposes ten tools to Claude:
+Exposes thirteen tools to Claude:
   - list_events, create_event, update_event, delete_event
   - send_email
-  - list_tasks, add_tasks, complete_task, delete_task, clear_completed
+  - list_task_lists, list_tasks, add_tasks, complete_task, delete_task,
+    clear_completed, delete_task_list, rename_task_list
 """
 
 import asyncio
@@ -209,14 +210,22 @@ class MCPServer:
                     },
                 ),
                 types.Tool(
+                    name="list_task_lists",
+                    description="List all task lists. Use this to discover what lists exist before creating duplicates.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {},
+                    },
+                ),
+                types.Tool(
                     name="list_tasks",
-                    description="List incomplete tasks from a task list. Use list_name 'Groceries' for shopping items or 'To-Do' for general tasks.",
+                    description="List incomplete tasks from a task list.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "list_name": {
                                 "type": "string",
-                                "description": "Name of the task list (e.g. 'Groceries' or 'To-Do')",
+                                "description": "Name of the task list (e.g. 'Costco', 'Home Renovation', 'To-Do')",
                             },
                         },
                         "required": ["list_name"],
@@ -224,13 +233,13 @@ class MCPServer:
                 ),
                 types.Tool(
                     name="add_tasks",
-                    description="Add one or more tasks to a task list. Use list_name 'Groceries' for shopping items or 'To-Do' for general tasks.",
+                    description="Add one or more tasks to a task list. The list is created automatically if it doesn't exist.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "list_name": {
                                 "type": "string",
-                                "description": "Name of the task list (e.g. 'Groceries' or 'To-Do')",
+                                "description": "Name of the task list (e.g. 'Costco', 'Home Renovation', 'To-Do')",
                             },
                             "items": {
                                 "type": "array",
@@ -291,6 +300,38 @@ class MCPServer:
                         "required": ["list_name"],
                     },
                 ),
+                types.Tool(
+                    name="delete_task_list",
+                    description="Delete an entire task list and all its tasks.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "list_name": {
+                                "type": "string",
+                                "description": "Name of the task list to delete",
+                            },
+                        },
+                        "required": ["list_name"],
+                    },
+                ),
+                types.Tool(
+                    name="rename_task_list",
+                    description="Rename an existing task list.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "list_name": {
+                                "type": "string",
+                                "description": "Current name of the task list",
+                            },
+                            "new_name": {
+                                "type": "string",
+                                "description": "New name for the task list",
+                            },
+                        },
+                        "required": ["list_name", "new_name"],
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -326,11 +367,14 @@ class MCPServer:
             "update_event": self._update_event,
             "delete_event": self._delete_event,
             "send_email": self._send_email,
+            "list_task_lists": self._list_task_lists,
             "list_tasks": self._list_tasks,
             "add_tasks": self._add_tasks,
             "complete_task": self._complete_task,
             "delete_task": self._delete_task,
             "clear_completed": self._clear_completed,
+            "delete_task_list": self._delete_task_list,
+            "rename_task_list": self._rename_task_list,
         }
         handler = dispatch.get(name)
         if handler:
@@ -451,13 +495,19 @@ class MCPServer:
     # Google Tasks operations (synchronous, run in executor)
     # ------------------------------------------------------------------
 
-    def _get_or_create_task_list(self, list_name: str) -> str:
-        """Find a task list by name, or create it. Returns the list ID."""
+    def _find_task_list(self, list_name: str) -> str | None:
+        """Find a task list by name (case-insensitive). Returns the list ID or None."""
         result = self.tasks.tasklists().list().execute()
         for tl in result.get("items", []):
             if tl["title"].lower() == list_name.lower():
                 return tl["id"]
-        # Create it
+        return None
+
+    def _get_or_create_task_list(self, list_name: str) -> str:
+        """Find a task list by name, or create it. Returns the list ID."""
+        list_id = self._find_task_list(list_name)
+        if list_id:
+            return list_id
         new_list = self.tasks.tasklists().insert(
             body={"title": list_name}
         ).execute()
@@ -519,6 +569,29 @@ class MCPServer:
         list_id = self._get_or_create_task_list(args["list_name"])
         self.tasks.tasks().clear(tasklist=list_id).execute()
         return {"status": "cleared", "list": args["list_name"]}
+
+    def _list_task_lists(self, args: dict) -> list:
+        result = self.tasks.tasklists().list().execute()
+        return [
+            {"title": tl.get("title", ""), "id": tl.get("id", "")}
+            for tl in result.get("items", [])
+        ]
+
+    def _delete_task_list(self, args: dict) -> dict:
+        list_id = self._find_task_list(args["list_name"])
+        if not list_id:
+            return {"error": f"Task list '{args['list_name']}' not found"}
+        self.tasks.tasklists().delete(tasklist=list_id).execute()
+        return {"status": "deleted", "list": args["list_name"]}
+
+    def _rename_task_list(self, args: dict) -> dict:
+        list_id = self._find_task_list(args["list_name"])
+        if not list_id:
+            return {"error": f"Task list '{args['list_name']}' not found"}
+        self.tasks.tasklists().patch(
+            tasklist=list_id, body={"title": args["new_name"]}
+        ).execute()
+        return {"status": "renamed", "old_name": args["list_name"], "new_name": args["new_name"]}
 
 
 if __name__ == "__main__":

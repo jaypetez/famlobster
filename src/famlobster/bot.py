@@ -33,7 +33,7 @@ from telegram.ext import (
 load_dotenv()
 
 from .agent import FamilyAgent
-from .reminders import setup_scheduler
+from .reminders import load_custom_reminders, setup_scheduler
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
@@ -147,7 +147,8 @@ async def post_init(application: Application) -> None:
     mcp_session = application.bot_data["mcp_session"]
     logger.info("MCP calendar server ready")
 
-    # Start the reminder scheduler (before agent, so we can pass it in)
+    # Start the reminder scheduler (built-in jobs only — custom reminders
+    # are loaded after the agent is created so they can process through Claude)
     scheduler = setup_scheduler(application.bot, mcp_session)
     application.bot_data["scheduler"] = scheduler
 
@@ -162,6 +163,10 @@ async def post_init(application: Application) -> None:
     await agent.load_tools()
     application.bot_data["agent"] = agent
     logger.info("FamilyAgent ready with %d tools", len(agent.tools))
+
+    # Load custom reminders now that the agent exists — reminders are
+    # processed through the agent so Claude can call tools when they fire
+    load_custom_reminders(scheduler, agent)
 
     logger.info("FamLobster is ready!")
 

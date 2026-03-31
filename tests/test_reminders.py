@@ -1,13 +1,21 @@
+import asyncio
 import json
+import os
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from famlobster.reminders import (
     _format_time,
     _read_reminders_file,
+    _register_job,
     _write_reminders_file,
     add_reminder,
     get_all_reminders,
+    load_custom_reminders,
     remove_reminder,
+    send_custom_reminder,
     update_reminder,
 )
 
@@ -61,7 +69,7 @@ def test_write_then_read_roundtrip(tmp_reminders_file):
 def test_add_reminder_cron(mock_scheduler, mock_bot, tmp_reminders_file):
     result = add_reminder(
         scheduler=mock_scheduler,
-        bot=mock_bot,
+        agent=mock_bot,
         message="Take out trash",
         hour=18,
         minute=0,
@@ -85,7 +93,7 @@ def test_add_reminder_cron(mock_scheduler, mock_bot, tmp_reminders_file):
 def test_add_reminder_with_day_of_week(mock_scheduler, mock_bot, tmp_reminders_file):
     result = add_reminder(
         scheduler=mock_scheduler,
-        bot=mock_bot,
+        agent=mock_bot,
         message="Prep lunches",
         hour=17,
         minute=0,
@@ -102,7 +110,7 @@ def test_add_reminder_with_day_of_week(mock_scheduler, mock_bot, tmp_reminders_f
 
 def test_remove_reminder_success(mock_scheduler, mock_bot, tmp_reminders_file):
     added = add_reminder(
-        scheduler=mock_scheduler, bot=mock_bot,
+        scheduler=mock_scheduler, agent=mock_bot,
         message="Test", hour=9, minute=0, chat_id=-100,
     )
     result = remove_reminder(mock_scheduler, added["id"])
@@ -130,13 +138,13 @@ def test_remove_reminder_not_found(mock_scheduler, tmp_reminders_file):
 
 def test_update_reminder_custom(mock_scheduler, mock_bot, tmp_reminders_file):
     added = add_reminder(
-        scheduler=mock_scheduler, bot=mock_bot,
+        scheduler=mock_scheduler, agent=mock_bot,
         message="Old message", hour=9, minute=0, chat_id=-100,
     )
     mock_scheduler.reset_mock()
 
     result = update_reminder(
-        scheduler=mock_scheduler, bot=mock_bot,
+        scheduler=mock_scheduler, agent=mock_bot,
         reminder_id=added["id"],
         message="New message",
         hour=10,
@@ -150,7 +158,7 @@ def test_update_reminder_custom(mock_scheduler, mock_bot, tmp_reminders_file):
 
 def test_update_reminder_not_found(mock_scheduler, mock_bot, tmp_reminders_file):
     result = update_reminder(
-        scheduler=mock_scheduler, bot=mock_bot,
+        scheduler=mock_scheduler, agent=mock_bot,
         reminder_id="nonexistent",
     )
     assert "error" in result
@@ -161,6 +169,171 @@ def test_update_reminder_not_found(mock_scheduler, mock_bot, tmp_reminders_file)
 # -------------------------------------------------------------------
 
 
-def test_get_all_reminders_empty(mock_scheduler):
+def test_get_all_reminders_empty(mock_scheduler, tmp_reminders_file):
     result = get_all_reminders(mock_scheduler)
     assert result == []
+
+
+# -------------------------------------------------------------------
+# send_custom_reminder
+# -------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_send_custom_reminder_processes_through_agent(monkeypatch):
+    """Verify send_custom_reminder routes message through agent and sends response."""
+    monkeypatch.setenv("REMINDER_CHAT_ID", "-100999")
+    agent = MagicMock()
+    agent.process_message = AsyncMock(return_value="You have 3 events today.")
+    agent.bot = MagicMock()
+    agent.bot.send_message = AsyncMock()
+
+    await send_custom_reminder(agent, "What's on the calendar today?")
+
+    agent.process_message.assert_called_once_with(-1, "What's on the calendar today?")
+    agent.bot.send_message.assert_called_once_with(
+        chat_id=-100999, text="You have 3 events today.", parse_mode="Markdown"
+    )
+    agent.clear_history.assert_called_once_with(-1)
+
+
+@pytest.mark.asyncio
+async def test_send_custom_reminder_no_chat_id(monkeypatch):
+    """If REMINDER_CHAT_ID is unset, send_custom_reminder should not call agent."""
+    monkeypatch.delenv("REMINDER_CHAT_ID", raising=False)
+    agent = MagicMock()
+    agent.process_message = AsyncMock()
+
+    await send_custom_reminder(agent, "Test")
+
+    agent.process_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_custom_reminder_falls_back_on_agent_error(monkeypatch):
+    """If agent.process_message raises, fall back to sending raw message."""
+    monkeypatch.setenv("REMINDER_CHAT_ID", "-100999")
+    agent = MagicMock()
+    agent.process_message = AsyncMock(side_effect=Exception("API error"))
+    agent.bot = MagicMock()
+    agent.bot.send_message = AsyncMock()
+
+    await send_custom_reminder(agent, "Take out the trash")
+
+    # Should fall back to raw message
+    agent.bot.send_message.assert_called_once_with(
+        chat_id=-100999, text="Reminder: Take out the trash"
+    )
+
+
+# -------------------------------------------------------------------
+# _register_job — verify scheduler.add_job is called correctly
+# -------------------------------------------------------------------
+
+
+def test_register_job_cron():
+    """Verify _register_job creates a CronTrigger job with correct args."""
+    scheduler = MagicMock()
+    agent = MagicMock()
+    reminder = {
+        "id": "reminder_123",
+        "chat_id": -100999,
+        "message": "Test cron",
+        "schedule": {"type": "cron", "hour": 17, "minute": 30, "day_of_week": "mon,fri"},
+    }
+    _register_job(scheduler, agent, reminder, "America/Chicago")
+
+    scheduler.add_job.assert_called_once()
+    call_kwargs = scheduler.add_job.call_args
+    # Function should be send_custom_reminder
+    assert call_kwargs[0][0] is send_custom_reminder
+    # Args should be [agent, message] (no chat_id — read from env at send time)
+    assert call_kwargs[1]["args"] == [agent, "Test cron"]
+    assert call_kwargs[1]["id"] == "reminder_123"
+
+
+def test_register_job_interval():
+    """Verify _register_job creates an IntervalTrigger job."""
+    scheduler = MagicMock()
+    agent = MagicMock()
+    reminder = {
+        "id": "reminder_456",
+        "chat_id": -100999,
+        "message": "Test interval",
+        "schedule": {"type": "interval", "interval_minutes": 15},
+    }
+    _register_job(scheduler, agent, reminder, "America/Chicago")
+
+    scheduler.add_job.assert_called_once()
+    assert scheduler.add_job.call_args[1]["args"] == [agent, "Test interval"]
+
+
+# -------------------------------------------------------------------
+# load_custom_reminders
+# -------------------------------------------------------------------
+
+
+def test_load_custom_reminders_restores_jobs(tmp_reminders_file):
+    """Verify load_custom_reminders reads JSON and registers each enabled reminder."""
+    reminders = [
+        {
+            "id": "r1", "chat_id": -100, "message": "First",
+            "schedule": {"type": "cron", "hour": 8, "minute": 0}, "enabled": True,
+        },
+        {
+            "id": "r2", "chat_id": -100, "message": "Disabled",
+            "schedule": {"type": "cron", "hour": 9, "minute": 0}, "enabled": False,
+        },
+        {
+            "id": "r3", "chat_id": -100, "message": "Third",
+            "schedule": {"type": "cron", "hour": 10, "minute": 0}, "enabled": True,
+        },
+    ]
+    Path(tmp_reminders_file).write_text(json.dumps(reminders))
+
+    scheduler = MagicMock()
+    agent = MagicMock()
+    load_custom_reminders(scheduler, agent)
+
+    # Only 2 enabled reminders should be registered
+    assert scheduler.add_job.call_count == 2
+
+
+# -------------------------------------------------------------------
+# Scheduler integration — real AsyncIOScheduler fires a job
+# -------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scheduler_actually_fires_reminder(monkeypatch):
+    """End-to-end: real scheduler fires send_custom_reminder within seconds."""
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
+
+    monkeypatch.setenv("REMINDER_CHAT_ID", "-100999")
+
+    agent = MagicMock()
+    agent.process_message = AsyncMock(return_value="Reminder response")
+    agent.bot = MagicMock()
+    agent.bot.send_message = AsyncMock()
+
+    scheduler = AsyncIOScheduler(timezone="America/Chicago")
+    scheduler.add_job(
+        send_custom_reminder,
+        IntervalTrigger(seconds=1),
+        args=[agent, "Scheduler test"],
+        id="test_fire",
+        misfire_grace_time=10,
+    )
+    scheduler.start()
+
+    # Wait up to 3 seconds for the job to fire
+    for _ in range(30):
+        if agent.bot.send_message.call_count > 0:
+            break
+        await asyncio.sleep(0.1)
+
+    scheduler.shutdown(wait=False)
+
+    assert agent.bot.send_message.call_count >= 1
+    agent.process_message.assert_called_with(-1, "Scheduler test")

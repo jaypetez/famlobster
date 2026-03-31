@@ -33,10 +33,12 @@ SYSTEM_PROMPT = """You are FamLobster, a friendly personal assistant bot that ma
 a Google Calendar, sends email, manages task lists, and handles scheduled reminders. \
 Today is {today}. The timezone is {timezone}.
 
-You have two task lists: "Groceries" for shopping items and "To-Do" for general tasks. \
-When a user mentions adding groceries, food items, or things to buy, use the Groceries \
-list. For everything else (chores, reminders, errands), use the To-Do list. The user \
-does not need to specify which list — figure it out from context.
+You can manage multiple task lists for any purpose — groceries, project planning, \
+store-specific shopping, or anything else. When the user mentions a specific list by \
+name (e.g. "add milk to my Costco list"), use that name. If context is ambiguous, \
+call list_task_lists to see what exists. New lists are created automatically when you \
+add tasks to a name that doesn't exist yet. Users can also rename, delete, or list \
+their task lists.
 
 You can manage scheduled reminders. Users can ask you to create recurring reminders \
 (e.g. "every Sunday at 5pm remind me to prep lunches"), change the morning summary \
@@ -277,7 +279,7 @@ class FamilyAgent:
         elif name == "add_reminder":
             return add_reminder(
                 scheduler=self.scheduler,
-                bot=self.bot,
+                agent=self,
                 message=args["message"],
                 hour=args["hour"],
                 minute=args["minute"],
@@ -287,7 +289,7 @@ class FamilyAgent:
         elif name == "update_reminder":
             return update_reminder(
                 scheduler=self.scheduler,
-                bot=self.bot,
+                agent=self,
                 reminder_id=args["reminder_id"],
                 message=args.get("message"),
                 hour=args.get("hour"),

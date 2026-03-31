@@ -68,9 +68,6 @@ def setup_scheduler(bot: Bot, mcp_session: ClientSession) -> AsyncIOScheduler:
             "Send /get_id in your group chat to find the chat ID."
         )
 
-    # Load any custom reminders saved from previous runs
-    load_custom_reminders(scheduler, bot)
-
     scheduler.start()
     return scheduler
 
@@ -99,7 +96,7 @@ def _write_reminders_file(reminders: list[dict]) -> None:
     path.write_text(json.dumps(reminders, indent=2))
 
 
-def load_custom_reminders(scheduler: AsyncIOScheduler, bot: Bot) -> None:
+def load_custom_reminders(scheduler: AsyncIOScheduler, agent) -> None:
     """Load saved custom reminders and register them with the scheduler."""
     reminders = _read_reminders_file()
     tz = os.getenv("TIMEZONE", "America/Chicago")
@@ -107,14 +104,14 @@ def load_custom_reminders(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         if not r.get("enabled", True):
             continue
         try:
-            _register_job(scheduler, bot, r, tz)
+            _register_job(scheduler, agent, r, tz)
             logger.info("Restored custom reminder: %s", r["id"])
         except Exception:
             logger.exception("Failed to restore reminder %s", r.get("id"))
 
 
 def _register_job(
-    scheduler: AsyncIOScheduler, bot: Bot, reminder: dict, tz: str
+    scheduler: AsyncIOScheduler, agent, reminder: dict, tz: str
 ) -> None:
     """Register a single custom reminder as an APScheduler job."""
     schedule = reminder["schedule"]
@@ -133,7 +130,7 @@ def _register_job(
     scheduler.add_job(
         send_custom_reminder,
         trigger,
-        args=[bot, reminder["chat_id"], reminder["message"]],
+        args=[agent, reminder["message"]],
         id=reminder["id"],
         name=reminder.get("message", "Custom reminder"),
         replace_existing=True,
@@ -141,17 +138,40 @@ def _register_job(
     )
 
 
-async def send_custom_reminder(bot: Bot, chat_id: int, message: str) -> None:
-    """Send a custom reminder message to the chat."""
+# Internal chat_id used for processing reminders through the agent.
+# Keeps reminder tool calls out of real user conversation history.
+_REMINDER_CHAT_ID = -1
+
+
+async def send_custom_reminder(agent, message: str) -> None:
+    """Process a reminder through the agent so Claude can call tools.
+
+    The message is sent to Claude as if a user said it, so Claude can call
+    tools (e.g. list_events) and return a real answer. The response is sent
+    to REMINDER_CHAT_ID. Falls back to sending the raw message if agent
+    processing fails.
+    """
+    chat_id_str = os.getenv("REMINDER_CHAT_ID")
+    if not chat_id_str:
+        logger.warning("REMINDER_CHAT_ID not set — skipping custom reminder: %s", message)
+        return
+    chat_id = int(chat_id_str)
     try:
-        await bot.send_message(chat_id=chat_id, text=f"Reminder: {message}")
+        response = await agent.process_message(_REMINDER_CHAT_ID, message)
+        await agent.bot.send_message(chat_id=chat_id, text=response, parse_mode="Markdown")
     except Exception:
-        logger.exception("Failed to send custom reminder to chat %s", chat_id)
+        logger.exception("Agent failed to process reminder, sending raw message")
+        try:
+            await agent.bot.send_message(chat_id=chat_id, text=f"Reminder: {message}")
+        except Exception:
+            logger.exception("Failed to send fallback reminder to chat %s", chat_id)
+    finally:
+        agent.clear_history(_REMINDER_CHAT_ID)
 
 
 def add_reminder(
     scheduler: AsyncIOScheduler,
-    bot: Bot,
+    agent,
     message: str,
     hour: int,
     minute: int,
@@ -178,7 +198,7 @@ def add_reminder(
         "enabled": True,
     }
 
-    _register_job(scheduler, bot, reminder, tz)
+    _register_job(scheduler, agent, reminder, tz)
 
     reminders = _read_reminders_file()
     reminders.append(reminder)
@@ -190,7 +210,7 @@ def add_reminder(
 
 def update_reminder(
     scheduler: AsyncIOScheduler,
-    bot: Bot,
+    agent,
     reminder_id: str,
     message: str | None = None,
     hour: int | None = None,
@@ -250,7 +270,7 @@ def update_reminder(
     except Exception:
         pass
     if target.get("enabled", True):
-        _register_job(scheduler, bot, target, tz)
+        _register_job(scheduler, agent, target, tz)
 
     logger.info("Updated custom reminder: %s", reminder_id)
     return {"status": "updated", "id": reminder_id}

@@ -14,7 +14,7 @@
 
 ---
 
-A Telegram bot that manages your Google Calendar, sends email, tracks grocery/to-do lists, and handles scheduled reminders — all through natural language. Powered by Claude AI and the Model Context Protocol (MCP).
+A Telegram bot that manages your Google Calendar, sends email, tracks task lists, and handles scheduled reminders — all through natural language. Powered by Claude AI and the Model Context Protocol (MCP).
 
 Just text the bot like you'd text a person:
 
@@ -26,11 +26,13 @@ Just text the bot like you'd text a person:
 **Email**
 - "Email grandma that the kids have a recital on Saturday"
 
-**Grocery & to-do lists** *(Google Tasks)*
-- "Add milk, eggs, and bread to the grocery list"
-- "What do we need from the store?"
+**Task lists** *(Google Tasks)*
+- "Add milk and eggs to the Costco list"
+- "What's on my Trader Joe's list?"
+- "What lists do I have?"
+- "Add chicken to the grocery list" *(auto-creates a list named "grocery")*
 - "Got the eggs" / "Mark eggs as done"
-- "Remind me to call the plumber" *(goes to To-Do list)*
+- "Rename my grocery list to Whole Foods"
 
 **Scheduled reminders**
 - "Remind me every Sunday at 5pm to prep lunches"
@@ -274,9 +276,8 @@ Everything else is natural language — just talk to the bot.
 |---------|-------------|
 | **Calendar** | View, add, edit, delete Google Calendar events |
 | **Email** | Send emails via Gmail |
-| **Grocery list** | Add/remove/check off items on a shared Google Tasks list |
-| **To-do list** | General tasks and chores on a separate Google Tasks list |
-| **Scheduled reminders** | Create, update, and remove recurring reminders through chat — persisted to `~/.config/famlobster/reminders.json` |
+| **Task lists** | Create and manage multiple named lists (groceries, to-do, projects, store-specific shopping, etc.) via Google Tasks |
+| **Scheduled reminders** | Create, update, and remove recurring reminders through chat — reminders are processed by the AI agent so they can call tools (e.g. fetch upcoming calendar events) |
 | **Morning summary** | Automatic daily briefing of today's calendar events |
 | **Pre-event alerts** | Heads-up notification before events start |
 

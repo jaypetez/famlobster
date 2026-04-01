@@ -40,6 +40,12 @@ Just text the bot like you'd text a person:
 - "Change the morning summary to 6:30am"
 - "Disable pre-event reminders"
 
+**Personality**
+- `/personality snarky` — dry wit and playful sarcasm
+- `/personality pirate` — arr, matey!
+- `/personality formal` — polished and professional
+- `/personality default` — back to normal
+
 The bot also sends a **morning summary** of the day's events and **pre-event reminders** so you never miss anything. Built for families, small teams, or anyone who wants a personal AI assistant in Telegram.
 
 ---
@@ -267,6 +273,7 @@ sudo journalctl -u famlobster -f   # view logs
 | `/start` | Welcome message and usage examples |
 | `/reset` | Clear conversation history for this chat |
 | `/get_id` | Show the current chat's ID (for `REMINDER_CHAT_ID`) |
+| `/personality` | Change the bot's tone (snarky, pirate, formal, butler, surfer, or any freeform style) |
 
 Everything else is natural language — just talk to the bot.
 
@@ -280,6 +287,7 @@ Everything else is natural language — just talk to the bot.
 | **Scheduled reminders** | Create, update, and remove recurring reminders through chat — reminders are processed by the AI agent so they can call tools (e.g. fetch upcoming calendar events) |
 | **Morning summary** | Automatic daily briefing of today's calendar events |
 | **Pre-event alerts** | Heads-up notification before events start |
+| **Personality** | Configurable tone via `/personality` — presets (snarky, pirate, formal, butler, surfer) or any custom style |
 
 ---
 

@@ -180,3 +180,28 @@ def test_rename_task_list_not_found():
     server = _make_server_with_tasklists([])
     result = server._rename_task_list({"list_name": "Nope", "new_name": "Still Nope"})
     assert "error" in result
+
+
+# -------------------------------------------------------------------
+# _list_events timezone boundaries
+# -------------------------------------------------------------------
+
+
+def test_list_events_uses_timezone_boundaries(monkeypatch):
+    """Verify _list_events uses configured TIMEZONE for date boundaries, not UTC."""
+    monkeypatch.setenv("TIMEZONE", "America/Los_Angeles")
+    server = _make_server()
+    server.timezone = "America/Los_Angeles"
+
+    # Mock the Google Calendar API
+    mock_events = MagicMock()
+    mock_events.list.return_value.execute.return_value = {"items": []}
+    server.service = MagicMock()
+    server.service.events.return_value = mock_events
+
+    server._list_events({"start_date": "2026-04-01", "end_date": "2026-04-01"})
+
+    call_kwargs = mock_events.list.call_args[1]
+    # Should use -07:00 offset (PDT), not Z (UTC)
+    assert "2026-04-01T00:00:00-07:00" == call_kwargs["timeMin"]
+    assert "2026-04-01T23:59:59-07:00" == call_kwargs["timeMax"]

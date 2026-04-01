@@ -157,7 +157,7 @@ cp .env.example ~/.config/famlobster/.env
 Edit `~/.config/famlobster/.env` and fill in:
 - `TELEGRAM_BOT_TOKEN` — from BotFather
 - `ANTHROPIC_API_KEY` — from [console.anthropic.com](https://console.anthropic.com)
-- `TIMEZONE` — your family's timezone (e.g., `America/Chicago`)
+- `TIMEZONE` — your family's IANA timezone (e.g., `America/Chicago`). Used for morning summaries, event date boundaries, and all scheduled reminders. **Must match your actual timezone** or events will appear on the wrong day.
 - Point the credential paths to your secrets directory:
   ```
   GOOGLE_CREDENTIALS_FILE=/home/YOUR_USERNAME/.config/famlobster/credentials.json

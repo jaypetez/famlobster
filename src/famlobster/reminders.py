@@ -13,8 +13,9 @@ import json
 import logging
 import os
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -352,7 +353,8 @@ async def send_morning_summary(
     bot: Bot, mcp_session: ClientSession, chat_id: str
 ) -> None:
     """Fetch today's events and send a morning briefing."""
-    today = date.today().isoformat()
+    tz = os.getenv("TIMEZONE", "America/Chicago")
+    today = datetime.now(ZoneInfo(tz)).date().isoformat()
     try:
         result = await mcp_session.call_tool(
             "list_events", {"start_date": today, "end_date": today}
@@ -385,7 +387,8 @@ async def send_pre_event_reminders(
     bot: Bot, mcp_session: ClientSession, chat_id: str, minutes_before: int
 ) -> None:
     """Check for events starting within `minutes_before` minutes and notify once."""
-    now = datetime.now(tz=timezone.utc)
+    tz_name = os.getenv("TIMEZONE", "America/Chicago")
+    now = datetime.now(tz=ZoneInfo(tz_name))
     window_end = now + timedelta(minutes=minutes_before + 5)
 
     today = now.date().isoformat()
@@ -411,7 +414,7 @@ async def send_pre_event_reminders(
         try:
             start_dt = datetime.fromisoformat(start_str)
             if start_dt.tzinfo is None:
-                start_dt = start_dt.replace(tzinfo=timezone.utc)
+                start_dt = start_dt.replace(tzinfo=ZoneInfo(tz_name))
         except ValueError:
             continue
 

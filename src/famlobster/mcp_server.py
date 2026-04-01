@@ -13,6 +13,7 @@ import base64
 import json
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -37,6 +38,7 @@ class MCPServer:
         self.gmail = None
         self.tasks = None
         self.calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
+        self.timezone = os.getenv("TIMEZONE", "America/Chicago")
         self.server = Server("famlobster")
         self._register_tools()
 
@@ -390,9 +392,14 @@ class MCPServer:
         end_date = args["end_date"]
         max_results = args.get("max_results", 20)
 
-        # Convert date strings to RFC3339 timestamps
-        time_min = f"{start_date}T00:00:00Z"
-        time_max = f"{end_date}T23:59:59Z"
+        # Convert date strings to RFC3339 timestamps in the user's timezone
+        tz = ZoneInfo(self.timezone)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=tz)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(
+            hour=23, minute=59, second=59, tzinfo=tz
+        )
+        time_min = start_dt.isoformat()
+        time_max = end_dt.isoformat()
 
         result = (
             self.service.events()

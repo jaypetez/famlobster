@@ -16,6 +16,8 @@ from famlobster.reminders import (
     load_custom_reminders,
     remove_reminder,
     send_custom_reminder,
+    send_morning_summary,
+    send_pre_event_reminders,
     update_reminder,
 )
 
@@ -337,3 +339,87 @@ async def test_scheduler_actually_fires_reminder(monkeypatch):
 
     assert agent.bot.send_message.call_count >= 1
     agent.process_message.assert_called_with(-1, "Scheduler test")
+
+
+# -------------------------------------------------------------------
+# Timezone-aware date handling in built-in reminders
+# -------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_morning_summary_uses_configured_timezone(monkeypatch):
+    """Verify send_morning_summary uses TIMEZONE env var, not system time."""
+    from unittest.mock import call
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    # Set timezone to one where the date differs from UTC
+    # Simulate: UTC is April 2 at 05:00, but in Honolulu (UTC-10) it's still April 1
+    fake_now = datetime(2026, 4, 2, 5, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+    monkeypatch.setenv("TIMEZONE", "Pacific/Honolulu")
+
+    original_now = datetime.now
+
+    def patched_now(tz=None):
+        if tz is not None:
+            return fake_now.astimezone(tz)
+        return original_now(tz)
+
+    monkeypatch.setattr("famlobster.reminders.datetime", type("dt", (), {
+        "now": staticmethod(patched_now),
+        "fromisoformat": datetime.fromisoformat,
+        "strptime": datetime.strptime,
+    }))
+
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    mcp_session = MagicMock()
+    mcp_result = MagicMock()
+    mcp_result.content = [MagicMock(text="[]")]
+    mcp_session.call_tool = AsyncMock(return_value=mcp_result)
+
+    await send_morning_summary(bot, mcp_session, "-100999")
+
+    # Should query April 1 (Honolulu date), not April 2 (UTC date)
+    mcp_session.call_tool.assert_called_once_with(
+        "list_events", {"start_date": "2026-04-01", "end_date": "2026-04-01"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_pre_event_check_uses_configured_timezone(monkeypatch):
+    """Verify send_pre_event_reminders uses TIMEZONE env var, not UTC."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    fake_now = datetime(2026, 4, 2, 5, 0, 0, tzinfo=ZoneInfo("UTC"))
+    monkeypatch.setenv("TIMEZONE", "Pacific/Honolulu")
+
+    original_now = datetime.now
+
+    def patched_now(tz=None):
+        if tz is not None:
+            return fake_now.astimezone(tz)
+        return original_now(tz)
+
+    monkeypatch.setattr("famlobster.reminders.datetime", type("dt", (), {
+        "now": staticmethod(patched_now),
+        "fromisoformat": datetime.fromisoformat,
+        "strptime": datetime.strptime,
+    }))
+
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    mcp_session = MagicMock()
+    mcp_result = MagicMock()
+    mcp_result.content = [MagicMock(text="[]")]
+    mcp_session.call_tool = AsyncMock(return_value=mcp_result)
+
+    await send_pre_event_reminders(bot, mcp_session, "-100999", 30)
+
+    # Should query April 1 (Honolulu date), not April 2 (UTC date)
+    mcp_session.call_tool.assert_called_once_with(
+        "list_events",
+        {"start_date": "2026-04-01", "end_date": "2026-04-01", "max_results": 50},
+    )

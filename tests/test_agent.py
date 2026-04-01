@@ -1,7 +1,8 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from famlobster.agent import FamilyAgent
+from famlobster.agent import PERSONALITY_PRESETS, FamilyAgent
 
 
 def _make_agent(scheduler=None, bot=None):
@@ -135,3 +136,50 @@ def test_handle_reminder_tool_unknown():
     agent = _make_agent(scheduler=MagicMock(), bot=MagicMock())
     result = agent._handle_reminder_tool("unknown_tool", {})
     assert "error" in result
+
+
+# -------------------------------------------------------------------
+# Personality
+# -------------------------------------------------------------------
+
+
+def test_set_personality_preset(tmp_path, monkeypatch):
+    monkeypatch.setattr("famlobster.agent.CONFIG_FILE", str(tmp_path / "config.json"))
+    agent = _make_agent()
+    label = agent.set_personality("snarky")
+    assert label == "snarky"
+    assert agent.personality == PERSONALITY_PRESETS["snarky"]
+
+
+def test_set_personality_freeform(tmp_path, monkeypatch):
+    monkeypatch.setattr("famlobster.agent.CONFIG_FILE", str(tmp_path / "config.json"))
+    agent = _make_agent()
+    label = agent.set_personality("Talk like a 1920s gangster")
+    assert label == "custom"
+    assert agent.personality == "Talk like a 1920s gangster"
+
+
+def test_set_personality_default_clears(tmp_path, monkeypatch):
+    monkeypatch.setattr("famlobster.agent.CONFIG_FILE", str(tmp_path / "config.json"))
+    agent = _make_agent()
+    agent.set_personality("snarky")
+    label = agent.set_personality("default")
+    assert label == "default (friendly assistant)"
+    assert agent.personality == ""
+
+
+def test_personality_persists_to_config(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr("famlobster.agent.CONFIG_FILE", str(config_path))
+    agent = _make_agent()
+    agent.set_personality("pirate")
+    saved = json.loads(config_path.read_text())
+    assert saved["personality"] == PERSONALITY_PRESETS["pirate"]
+
+
+def test_personality_loaded_on_init(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"personality": "Be extremely dramatic."}))
+    monkeypatch.setattr("famlobster.agent.CONFIG_FILE", str(config_path))
+    agent = _make_agent()
+    assert agent.personality == "Be extremely dramatic."

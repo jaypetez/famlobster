@@ -32,7 +32,7 @@ from telegram.ext import (
 
 load_dotenv()
 
-from .agent import FamilyAgent
+from .agent import PERSONALITY_PRESETS, FamilyAgent
 from .reminders import load_custom_reminders, setup_scheduler
 
 logging.basicConfig(
@@ -56,7 +56,8 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         '• "Move Tuesday\'s dentist to Thursday at 2pm"\n'
         '• "Delete the PTA meeting on Friday"\n\n'
         "Use /reset to clear our conversation history.\n"
-        "Use /get_id to see this chat's ID (useful for setting up reminders)."
+        "Use /get_id to see this chat's ID (useful for setting up reminders).\n"
+        "Use /personality to change my tone (try: snarky, pirate, formal, butler)."
     )
 
 
@@ -74,6 +75,25 @@ async def handle_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "morning summaries and pre-event reminders here.",
         parse_mode=ParseMode.MARKDOWN,
     )
+
+
+async def handle_personality(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    agent: FamilyAgent = context.bot_data["agent"]
+    args = " ".join(context.args) if context.args else ""
+
+    if not args:
+        current = agent.personality or "default (friendly assistant)"
+        presets = ", ".join(k for k in PERSONALITY_PRESETS if k != "default")
+        await update.message.reply_text(
+            f"Current personality: {current}\n\n"
+            f"Usage: /personality <style>\n"
+            f"Presets: {presets}\n"
+            f"Or use any freeform description."
+        )
+        return
+
+    label = agent.set_personality(args)
+    await update.message.reply_text(f"Personality set to: {label}")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -213,6 +233,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", handle_start))
     application.add_handler(CommandHandler("reset", handle_reset))
     application.add_handler(CommandHandler("get_id", handle_get_id))
+    application.add_handler(CommandHandler("personality", handle_personality))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
     )

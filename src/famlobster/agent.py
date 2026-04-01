@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import anthropic
@@ -28,6 +29,34 @@ from .reminders import (
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_TURNS = 20  # max user+assistant pairs to keep per chat
+
+CONFIG_FILE = os.getenv(
+    "CONFIG_FILE",
+    os.path.join(os.path.expanduser("~/.config/famlobster"), "config.json"),
+)
+
+PERSONALITY_PRESETS = {
+    "default": "",
+    "snarky": "Respond with dry wit and playful sarcasm. Be helpful but never miss a chance for a clever quip.",
+    "formal": "Respond in a polished, professional tone. Use proper grammar and avoid colloquialisms.",
+    "pirate": "Respond as a pirate. Use nautical language, say 'arr' and 'matey', and refer to calendars as 'ship logs'.",
+    "surfer": "Respond like a laid-back surfer. Use words like 'dude', 'gnarly', 'rad', and keep the vibe totally chill.",
+    "butler": "Respond as a distinguished English butler. Be impeccably polite, understated, and supremely competent.",
+}
+
+
+def _read_config() -> dict:
+    try:
+        return json.loads(Path(CONFIG_FILE).read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def _write_config(config: dict) -> None:
+    path = Path(CONFIG_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2))
+
 
 SYSTEM_PROMPT = """You are FamLobster, a friendly personal assistant bot that manages \
 a Google Calendar, sends email, manages task lists, and handles scheduled reminders. \
@@ -52,7 +81,8 @@ Keep responses concise and friendly.
 When listing events, format them clearly with day, date, time, and title.
 When creating events, confirm the details back to the user after saving.
 When you're unsure about a date or time, ask for clarification before acting.
-If an operation fails, explain what went wrong in plain English."""
+If an operation fails, explain what went wrong in plain English.\
+{personality}"""
 
 # Tool names handled locally (not forwarded to MCP subprocess)
 LOCAL_REMINDER_TOOLS = {
@@ -147,6 +177,7 @@ class FamilyAgent:
         self.timezone = os.getenv("TIMEZONE", "America/Chicago")
         self.conversation_history: dict[int, list[dict]] = {}
         self.tools: list[dict] = []
+        self.personality = _read_config().get("personality", "")
         self.scheduler = scheduler
         self.bot = bot
         self.reminder_chat_id = reminder_chat_id
@@ -169,6 +200,23 @@ class FamilyAgent:
 
     def clear_history(self, chat_id: int) -> None:
         self.conversation_history.pop(chat_id, None)
+
+    def set_personality(self, style: str) -> str:
+        """Set personality. Accepts a preset name or freeform text. Returns label."""
+        style = style.strip()
+        if not style or style.lower() == "default":
+            self.personality = ""
+            label = "default (friendly assistant)"
+        elif style.lower() in PERSONALITY_PRESETS:
+            self.personality = PERSONALITY_PRESETS[style.lower()]
+            label = style.lower()
+        else:
+            self.personality = style
+            label = "custom"
+        config = _read_config()
+        config["personality"] = self.personality
+        _write_config(config)
+        return label
 
     async def process_message(self, chat_id: int, user_text: str) -> str:
         """Main entry point — append user message to history, run tool loop, return reply."""
@@ -203,9 +251,13 @@ class FamilyAgent:
         """Run the Claude tool-use loop until end_turn, return final text."""
         history = self.conversation_history[chat_id]
         today = datetime.now(ZoneInfo(self.timezone)).date().isoformat()
+        personality_block = (
+            f"\n\nPersonality and tone: {self.personality}" if self.personality else ""
+        )
         system = SYSTEM_PROMPT.format(
             today=today,
             timezone=self.timezone,
+            personality=personality_block,
         )
 
         while True:

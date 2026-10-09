@@ -81,7 +81,7 @@ export $(cat ~/.config/famlobster/.env | grep -v '#' | xargs)
 famlobster
 ```
 
-Send `/get_id` in your Telegram group to get the chat ID for reminders, add it to `.env`, and restart.
+Send `/get_id` to the bot to get your Telegram user ID and add it to `ALLOWED_USER_IDS` in `.env` — **the bot ignores everyone not on that list**. Send `/get_id` in your family group too, put the chat ID in `REMINDER_CHAT_ID`, and restart.
 
 If any of that is unfamiliar, the [detailed setup guide](#setup) below walks through every step.
 
@@ -168,7 +168,7 @@ Edit `~/.config/famlobster/.env` and fill in:
   GOOGLE_CREDENTIALS_FILE=/home/YOUR_USERNAME/.config/famlobster/credentials.json
   GOOGLE_TOKEN_FILE=/home/YOUR_USERNAME/.config/famlobster/token.json
   ```
-- Leave `REMINDER_CHAT_ID` blank for now (see step 7)
+- Leave `ALLOWED_USER_IDS` and `REMINDER_CHAT_ID` blank for now (see step 7)
 
 ### 6. Authorize Google (one-time setup)
 
@@ -219,12 +219,14 @@ Replace `youruser@yourserver` with your actual SSH login (e.g., `pi@192.168.1.50
 
 The token auto-refreshes silently — you'll never need to do this again unless you revoke access in your Google account settings.
 
-### 7. Get your group chat ID (for reminders)
+### 7. Allow your family and get your group chat ID
 
-1. Add your bot to your family Telegram group chat
-2. Send `/get_id` in the group chat
-3. The bot will reply with the chat ID (a negative number like `-1001234567890`)
-4. Add it to `~/.config/famlobster/.env` as `REMINDER_CHAT_ID`
+The bot only responds to Telegram users listed in `ALLOWED_USER_IDS`. Until you set it, only `/start` and `/get_id` work.
+
+1. Each family member sends `/get_id` to the bot and notes **their user ID**
+2. Add them to `~/.config/famlobster/.env` as a comma-separated list, e.g. `ALLOWED_USER_IDS=123456789,987654321`
+3. Add your bot to your family Telegram group chat and send `/get_id` there
+4. The bot will reply with the chat ID (a negative number like `-1001234567890`); add it as `REMINDER_CHAT_ID`
 5. Restart the bot
 
 ---
@@ -277,7 +279,7 @@ sudo journalctl -u famlobster -f   # view logs
 |---------|-------------|
 | `/start` | Welcome message and usage examples |
 | `/reset` | Clear conversation history for this chat |
-| `/get_id` | Show the current chat's ID (for `REMINDER_CHAT_ID`) |
+| `/get_id` | Show your user ID (for `ALLOWED_USER_IDS`) and the current chat's ID (for `REMINDER_CHAT_ID`) |
 | `/personality` | Change the bot's tone (snarky, pirate, formal, butler, surfer, or any freeform style) |
 
 Everything else is natural language — just talk to the bot.

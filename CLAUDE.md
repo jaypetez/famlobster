@@ -69,6 +69,7 @@ Per-chat history in `agent.py` (`conversation_history` dict keyed by Telegram ch
 | `TELEGRAM_BOT_TOKEN` | — | Yes |
 | `ANTHROPIC_API_KEY` | — | Yes |
 | `GOOGLE_TOKEN_FILE` | `token.json` | No |
+| `ALLOWED_USER_IDS` | — | Yes (comma-separated Telegram user IDs; bot ignores everyone if unset) |
 | `REMINDER_CHAT_ID` | — | No (disables reminders if unset) |
 | `TIMEZONE` | `America/Chicago` | No |
 | `CLAUDE_MODEL` | `claude-haiku-4-5-20251001` | No |

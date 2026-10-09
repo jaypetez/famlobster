@@ -301,3 +301,22 @@ async def test_tool_args_not_logged_at_info(caplog):
         await agent.process_message(42, "what's on?")
     assert "Calling tool list_events" in caplog.text
     assert "secret-marker" not in caplog.text
+
+
+async def test_tool_loop_is_capped():
+    from famlobster.agent import MAX_TOOL_ITERATIONS, TOOL_LIMIT_REPLY
+
+    agent = _make_agent()
+    agent.session.call_tool = AsyncMock(
+        return_value=SimpleNamespace(content=[SimpleNamespace(text="[]")])
+    )
+    tool_block = SimpleNamespace(type="tool_use", id="tu", name="list_events", input={})
+    looping = SimpleNamespace(stop_reason="tool_use", content=[tool_block])
+    agent.client.messages.create = AsyncMock(return_value=looping)
+
+    reply = await agent.process_message(42, "loop forever")
+
+    assert reply == TOOL_LIMIT_REPLY
+    assert agent.client.messages.create.await_count == MAX_TOOL_ITERATIONS
+    history = agent.conversation_history[42]
+    assert history[-1] == {"role": "assistant", "content": TOOL_LIMIT_REPLY}

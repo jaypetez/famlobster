@@ -42,6 +42,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def parse_allowed_user_ids(raw: str | None) -> set[int]:
+    """Parse ALLOWED_USER_IDS (comma-separated Telegram user IDs) into a set."""
+    ids: set[int] = set()
+    for part in (raw or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            ids.add(int(part))
+        except ValueError:
+            logger.warning("Ignoring invalid entry in ALLOWED_USER_IDS: %r", part)
+    return ids
+
+
+def build_auth_filter(user_ids: set[int]) -> filters.User:
+    """Allowlist filter for handlers that act on data. Matches nobody when empty."""
+    return filters.User(user_id=user_ids, allow_empty=False)
+
+
 # ---------------------------------------------------------------------------
 # Telegram handlers
 # ---------------------------------------------------------------------------
@@ -56,7 +75,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         '• "Move Tuesday\'s dentist to Thursday at 2pm"\n'
         '• "Delete the PTA meeting on Friday"\n\n'
         "Use /reset to clear our conversation history.\n"
-        "Use /get_id to see this chat's ID (useful for setting up reminders).\n"
+        "Use /get_id to see your user ID and this chat's ID (needed for setup).\n"
         "Use /personality to change my tone (try: snarky, pirate, formal, butler)."
     )
 
@@ -69,11 +88,22 @@ async def handle_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def handle_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
+    user_id = update.effective_user.id if update.effective_user else None
     await update.message.reply_text(
+        f"Your user ID is: `{user_id}`\n"
         f"This chat's ID is: `{chat_id}`\n\n"
-        "Set `REMINDER_CHAT_ID={chat_id}` in your `.env` file to enable "
+        "Add your user ID to `ALLOWED_USER_IDS` in your `.env` file to use the bot.\n"
+        f"Set `REMINDER_CHAT_ID={chat_id}` to enable "
         "morning summaries and pre-event reminders here.",
         parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+async def handle_unauthorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    logger.warning(
+        "Ignoring update from unauthorized user %s (add to ALLOWED_USER_IDS to allow)",
+        user.id if user else "unknown",
     )
 
 
@@ -215,6 +245,25 @@ async def post_shutdown(application: Application) -> None:
 # ---------------------------------------------------------------------------
 
 
+def register_handlers(application: Application, allowed_user_ids: set[int]) -> None:
+    if not allowed_user_ids:
+        logger.warning(
+            "ALLOWED_USER_IDS is not set — the bot will ignore everyone except /start "
+            "and /get_id. Send /get_id to the bot to find your user ID."
+        )
+    authorized = build_auth_filter(allowed_user_ids)
+
+    # /start and /get_id stay open so new owners can discover their IDs
+    application.add_handler(CommandHandler("start", handle_start))
+    application.add_handler(CommandHandler("get_id", handle_get_id))
+    application.add_handler(CommandHandler("reset", handle_reset, filters=authorized))
+    application.add_handler(CommandHandler("personality", handle_personality, filters=authorized))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND & authorized, handle_message)
+    )
+    application.add_handler(MessageHandler(~authorized, handle_unauthorized))
+
+
 def main() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -223,12 +272,7 @@ def main() -> None:
     application = (
         Application.builder().token(token).post_init(post_init).post_shutdown(post_shutdown).build()
     )
-
-    application.add_handler(CommandHandler("start", handle_start))
-    application.add_handler(CommandHandler("reset", handle_reset))
-    application.add_handler(CommandHandler("get_id", handle_get_id))
-    application.add_handler(CommandHandler("personality", handle_personality))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    register_handlers(application, parse_allowed_user_ids(os.getenv("ALLOWED_USER_IDS")))
 
     logger.info("Starting polling...")
     application.run_polling(drop_pending_updates=True)

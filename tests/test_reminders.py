@@ -453,3 +453,49 @@ async def test_pre_event_check_uses_configured_timezone(monkeypatch):
         "list_events",
         {"start_date": "2026-04-01", "end_date": "2026-04-01", "max_results": 50},
     )
+
+
+# -------------------------------------------------------------------
+# Untrusted text and Markdown
+# -------------------------------------------------------------------
+
+
+async def test_pre_event_reminder_escapes_event_title(monkeypatch):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from famlobster import reminders
+
+    monkeypatch.setenv("TIMEZONE", "America/Chicago")
+    monkeypatch.setattr(reminders, "_reminded_event_ids", set())
+    start = (datetime.now(ZoneInfo("America/Chicago")) + timedelta(minutes=10)).isoformat()
+    evil = "[Verify account](https://evil.example) *now*"
+    events = [{"id": "e1", "summary": evil, "start": start}]
+
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    mcp_session = MagicMock()
+    mcp_session.call_tool = AsyncMock(
+        return_value=MagicMock(content=[MagicMock(text=json.dumps(events))])
+    )
+
+    await send_pre_event_reminders(bot, mcp_session, "-100999", 30)
+
+    text = bot.send_message.call_args.kwargs["text"]
+    assert "\[Verify account](https://evil.example) \*now\*" in text
+    assert "[Verify account](" not in text.replace("\[", "")
+
+
+async def test_send_markdown_falls_back_to_plain_text():
+    from telegram.error import BadRequest
+
+    from famlobster.reminders import send_markdown
+
+    bot = MagicMock()
+    bot.send_message = AsyncMock(side_effect=[BadRequest("Can't parse entities"), None])
+
+    await send_markdown(bot, 123, "unbalanced *markdown")
+
+    assert bot.send_message.await_count == 2
+    assert "parse_mode" not in bot.send_message.call_args.kwargs
+    assert bot.send_message.call_args.kwargs["text"] == "unbalanced *markdown"

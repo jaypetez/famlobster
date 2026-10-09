@@ -22,6 +22,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction, ParseMode
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -146,7 +147,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Sorry, something went wrong. Please try again.")
         return
 
-    await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
+    try:
+        await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
+    except BadRequest:
+        # Model output isn't always valid Telegram Markdown; don't drop the reply
+        logger.warning("Markdown rejected by Telegram for chat %d, sending plain text", chat_id)
+        await update.message.reply_text(reply)
 
     for action in agent.pop_new_actions(chat_id):
         buttons = InlineKeyboardMarkup(

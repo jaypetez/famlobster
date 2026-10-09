@@ -285,3 +285,19 @@ def test_describe_shows_real_recipient():
     text = PendingAction(chat_id=42, tool="send_email", args=EMAIL_ARGS).describe()
     assert "To: attacker@example.com" in text
     assert "Subject: schedule" in text
+
+
+async def test_tool_args_not_logged_at_info(caplog):
+    import logging
+
+    agent = _make_agent()
+    agent.session.call_tool = AsyncMock(
+        return_value=SimpleNamespace(content=[SimpleNamespace(text="[]")])
+    )
+    agent.client.messages.create = _tool_use_then_text(
+        "list_events", {"start_date": "2026-01-01", "end_date": "secret-marker"}
+    )
+    with caplog.at_level(logging.INFO, logger="famlobster.agent"):
+        await agent.process_message(42, "what's on?")
+    assert "Calling tool list_events" in caplog.text
+    assert "secret-marker" not in caplog.text

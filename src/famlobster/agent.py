@@ -335,7 +335,9 @@ class FamilyAgent:
                 for block in response.content:
                     if block.type != "tool_use":
                         continue
-                    logger.info("Calling tool %s with args %s", block.name, block.input)
+                    # Args can contain email bodies and other personal data: DEBUG only
+                    logger.info("Calling tool %s", block.name)
+                    logger.debug("Tool %s args: %s", block.name, block.input)
 
                     if requires_confirmation(block.name, block.input):
                         result_text = json.dumps(

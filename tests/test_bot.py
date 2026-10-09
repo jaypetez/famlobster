@@ -1,11 +1,13 @@
 from datetime import datetime
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from telegram import Chat, Message, MessageEntity, Update, User
 from telegram.ext import Application
 
 from famlobster.bot import (
+    handle_action_callback,
     handle_get_id,
     handle_message,
     handle_personality,
@@ -87,3 +89,81 @@ def test_setup_commands_stay_open(make_app):
     app = make_app(set())
     assert _dispatched_callback(app, _update(STRANGER_ID, "/start")) is handle_start
     assert _dispatched_callback(app, _update(STRANGER_ID, "/get_id")) is handle_get_id
+
+
+# -------------------------------------------------------------------
+# Confirmation callbacks
+# -------------------------------------------------------------------
+
+
+def _callback_update(user_id: int, data: str, chat_id: int = OWNER_ID):
+    query = MagicMock()
+    query.from_user.id = user_id
+    query.data = data
+    query.message.chat.id = chat_id
+    query.message.text = "Send this email?"
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+    return SimpleNamespace(callback_query=query), query
+
+
+def _context(agent):
+    return SimpleNamespace(bot_data={"agent": agent, "allowed_user_ids": {OWNER_ID}})
+
+
+async def test_callback_confirm_executes_action():
+    agent = MagicMock()
+    agent.take_pending_action.return_value = "action"
+    agent.execute_action = AsyncMock(return_value={"status": "sent"})
+    update, query = _callback_update(OWNER_ID, "act:ok:abc")
+
+    await handle_action_callback(update, _context(agent))
+
+    agent.take_pending_action.assert_called_once_with("abc", OWNER_ID)
+    agent.execute_action.assert_awaited_once_with("action")
+    assert "Done" in query.edit_message_text.call_args.args[0]
+
+
+async def test_callback_cancel_does_not_execute():
+    agent = MagicMock()
+    agent.take_pending_action.return_value = "action"
+    agent.execute_action = AsyncMock()
+    update, query = _callback_update(OWNER_ID, "act:no:abc")
+
+    await handle_action_callback(update, _context(agent))
+
+    agent.execute_action.assert_not_called()
+    assert "Cancelled" in query.edit_message_text.call_args.args[0]
+
+
+async def test_callback_from_unauthorized_user_is_rejected():
+    agent = MagicMock()
+    agent.execute_action = AsyncMock()
+    update, query = _callback_update(STRANGER_ID, "act:ok:abc")
+
+    await handle_action_callback(update, _context(agent))
+
+    agent.take_pending_action.assert_not_called()
+    agent.execute_action.assert_not_called()
+
+
+async def test_callback_expired_action():
+    agent = MagicMock()
+    agent.take_pending_action.return_value = None
+    agent.execute_action = AsyncMock()
+    update, query = _callback_update(OWNER_ID, "act:ok:abc")
+
+    await handle_action_callback(update, _context(agent))
+
+    agent.execute_action.assert_not_called()
+    assert "Expired" in query.edit_message_text.call_args.args[0]
+
+
+def test_callback_handler_registered(make_app):
+    from telegram.ext import CallbackQueryHandler
+
+    app = make_app({OWNER_ID})
+    assert any(
+        isinstance(h, CallbackQueryHandler) and h.callback is handle_action_callback
+        for h in app.handlers[0]
+    )

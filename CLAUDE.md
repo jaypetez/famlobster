@@ -45,6 +45,8 @@ The bot runs two processes in one event loop:
 
 The set `LOCAL_REMINDER_TOOLS` in `agent.py` determines routing.
 
+Outbound actions that can leak data (`send_email`, and `create_event`/`update_event` with `attendees`) are never executed by the model directly. `requires_confirmation()` queues a `PendingAction` (single-use, 10-minute TTL), and `bot.py` shows its real arguments with Confirm/Cancel buttons; only an allowlisted user's tap runs it via `FamilyAgent.execute_action()`. Scheduled reminders cannot queue these actions.
+
 ### Startup Sequence (`bot.py:post_init`)
 
 1. Spawn MCP subprocess → wait for `session_ready` event

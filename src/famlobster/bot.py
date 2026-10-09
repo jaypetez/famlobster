@@ -20,10 +20,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -145,6 +146,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
 
+    for action in agent.pop_new_actions(chat_id):
+        buttons = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Confirm", callback_data=f"act:ok:{action.id}"),
+                    InlineKeyboardButton("Cancel", callback_data=f"act:no:{action.id}"),
+                ]
+            ]
+        )
+        # Plain text: the preview contains untrusted content (recipients, bodies)
+        await update.message.reply_text(action.describe(), reply_markup=buttons)
+
+
+async def handle_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Run or cancel a pending outbound action when an authorized user taps a button."""
+    query = update.callback_query
+    if query is None or query.message is None:
+        return
+    if query.from_user.id not in context.bot_data.get("allowed_user_ids", set()):
+        logger.warning("Ignoring confirmation from unauthorized user %s", query.from_user.id)
+        await query.answer("You're not allowed to do that.")
+        return
+
+    _, decision, action_id = (query.data or "").split(":", 2)
+    agent: FamilyAgent = context.bot_data["agent"]
+    action = agent.take_pending_action(action_id, query.message.chat.id)
+    preview = getattr(query.message, "text", None) or ""
+    await query.answer()
+
+    if action is None:
+        await query.edit_message_text(f"{preview}\n\n⌛ Expired or already handled.")
+        return
+    if decision != "ok":
+        await query.edit_message_text(f"{preview}\n\n✖ Cancelled.")
+        return
+
+    try:
+        result = await agent.execute_action(action)
+    except Exception:
+        logger.exception("Confirmed action %s failed", action.tool)
+        result = {"error": "unexpected error"}
+    if "error" in result:
+        await query.edit_message_text(f"{preview}\n\n⚠ Failed: {result['error']}")
+    else:
+        await query.edit_message_text(f"{preview}\n\n✅ Done.")
+
 
 # ---------------------------------------------------------------------------
 # Startup / shutdown hooks
@@ -252,6 +299,7 @@ def register_handlers(application: Application, allowed_user_ids: set[int]) -> N
             "and /get_id. Send /get_id to the bot to find your user ID."
         )
     authorized = build_auth_filter(allowed_user_ids)
+    application.bot_data["allowed_user_ids"] = allowed_user_ids
 
     # /start and /get_id stay open so new owners can discover their IDs
     application.add_handler(CommandHandler("start", handle_start))
@@ -262,6 +310,7 @@ def register_handlers(application: Application, allowed_user_ids: set[int]) -> N
         MessageHandler(filters.TEXT & ~filters.COMMAND & authorized, handle_message)
     )
     application.add_handler(MessageHandler(~authorized, handle_unauthorized))
+    application.add_handler(CallbackQueryHandler(handle_action_callback, pattern=r"^act:(ok|no):"))
 
 
 def main() -> None:

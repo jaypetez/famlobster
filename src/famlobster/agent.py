@@ -10,6 +10,9 @@ access to the in-process APScheduler instance.
 import json
 import logging
 import os
+import secrets
+import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -20,6 +23,7 @@ from mcp import ClientSession
 from telegram import Bot
 
 from .reminders import (
+    _REMINDER_CHAT_ID,
     add_reminder,
     get_all_reminders,
     remove_reminder,
@@ -29,6 +33,49 @@ from .reminders import (
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_TURNS = 20  # max user+assistant pairs to keep per chat
+
+# Outbound actions that can leak data to third parties need an explicit tap from
+# an authorized user before they run (see PendingAction / bot.handle_action_callback).
+CONFIRMATION_TTL_SECONDS = 600
+
+
+def requires_confirmation(tool: str, args: dict) -> bool:
+    if tool == "send_email":
+        return True
+    return tool in ("create_event", "update_event") and bool(args.get("attendees"))
+
+
+@dataclass
+class PendingAction:
+    chat_id: int
+    tool: str
+    args: dict
+    id: str = field(default_factory=lambda: secrets.token_urlsafe(8))
+    expires_at: float = field(default_factory=lambda: time.time() + CONFIRMATION_TTL_SECONDS)
+
+    def describe(self) -> str:
+        """Plain-text preview built from the actual tool args, not model output."""
+        a = self.args
+        if self.tool == "send_email":
+            return (
+                "Send this email?\n\n"
+                f"To: {a.get('to', '')}\n"
+                f"Subject: {a.get('subject', '')}\n\n"
+                f"{a.get('body', '')}"
+            )
+        verb = "Create" if self.tool == "create_event" else "Update"
+        lines = [f"{verb} this event and share it with attendees?\n"]
+        if "summary" in a:
+            lines.append(f"Title: {a['summary']}")
+        if "start_datetime" in a:
+            lines.append(f"Start: {a['start_datetime']}")
+        if "end_datetime" in a:
+            lines.append(f"End: {a['end_datetime']}")
+        lines.append(f"Attendees: {', '.join(a.get('attendees', []))}")
+        if a.get("description"):
+            lines.append(f"\n{a['description']}")
+        return "\n".join(lines)
+
 
 CONFIG_FILE = os.getenv(
     "CONFIG_FILE",
@@ -179,6 +226,8 @@ class FamilyAgent:
         self.scheduler = scheduler
         self.bot = bot
         self.reminder_chat_id = reminder_chat_id
+        self.pending_actions: dict[str, PendingAction] = {}
+        self._unannounced: dict[int, list[str]] = {}
 
     async def load_tools(self) -> None:
         """Fetch tool definitions from the MCP server and add local reminder tools."""
@@ -288,7 +337,11 @@ class FamilyAgent:
                         continue
                     logger.info("Calling tool %s with args %s", block.name, block.input)
 
-                    if block.name in LOCAL_REMINDER_TOOLS:
+                    if requires_confirmation(block.name, block.input):
+                        result_text = json.dumps(
+                            self._queue_confirmation(chat_id, block.name, block.input)
+                        )
+                    elif block.name in LOCAL_REMINDER_TOOLS:
                         # Handle reminder tools locally
                         result_text = json.dumps(
                             self._handle_reminder_tool(block.name, block.input)
@@ -316,6 +369,49 @@ class FamilyAgent:
 
             # Unexpected stop reason — return whatever text we have
             return self._extract_text(response.content) or "(no response)"
+
+    def _queue_confirmation(self, chat_id: int, tool: str, args: dict) -> dict:
+        if chat_id == _REMINDER_CHAT_ID:
+            return {
+                "error": "This action needs the user's confirmation and cannot run "
+                "from a scheduled reminder."
+            }
+        now = time.time()
+        for action_id in [k for k, v in self.pending_actions.items() if v.expires_at < now]:
+            del self.pending_actions[action_id]
+        action = PendingAction(chat_id=chat_id, tool=tool, args=dict(args))
+        self.pending_actions[action.id] = action
+        self._unannounced.setdefault(chat_id, []).append(action.id)
+        return {
+            "status": "awaiting_user_confirmation",
+            "detail": "Nothing has been sent yet. The user will be shown the details with "
+            "a confirm button. Tell them to review it and tap Confirm.",
+        }
+
+    def pop_new_actions(self, chat_id: int) -> list[PendingAction]:
+        """Return actions queued for this chat that haven't been shown to the user yet."""
+        ids = self._unannounced.pop(chat_id, [])
+        return [self.pending_actions[i] for i in ids if i in self.pending_actions]
+
+    def take_pending_action(self, action_id: str, chat_id: int) -> PendingAction | None:
+        """Claim a pending action (single use). None if unknown, expired, or another chat's."""
+        action = self.pending_actions.get(action_id)
+        if action is None or action.chat_id != chat_id:
+            return None
+        del self.pending_actions[action_id]
+        if action.expires_at < time.time():
+            return None
+        return action
+
+    async def execute_action(self, action: PendingAction) -> dict:
+        """Run a confirmed action through the MCP server and return its parsed result."""
+        result = await self.session.call_tool(action.tool, action.args)
+        text = result.content[0].text if result.content else '{"error": "no result"}'
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return {"error": text}
+        return parsed if isinstance(parsed, dict) else {"result": parsed}
 
     def _handle_reminder_tool(self, name: str, args: dict) -> dict | list:
         """Dispatch local reminder tool calls."""

@@ -174,3 +174,21 @@ def test_httpx_request_logging_suppressed():
     import logging
 
     assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+
+
+def test_mcp_server_env_withholds_unrelated_secrets(monkeypatch):
+    from famlobster.bot import mcp_server_env
+
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:secret")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    monkeypatch.setenv("GOOGLE_TOKEN_FILE", "/srv/token.json")
+    monkeypatch.setenv("GOOGLE_CALENDAR_ID", "family")
+    monkeypatch.setenv("TIMEZONE", "America/Denver")
+
+    env = mcp_server_env()
+
+    assert "TELEGRAM_BOT_TOKEN" not in env
+    assert "ANTHROPIC_API_KEY" not in env
+    assert env["GOOGLE_TOKEN_FILE"] == "/srv/token.json"
+    assert env["GOOGLE_CALENDAR_ID"] == "family"
+    assert env["TIMEZONE"] == "America/Denver"

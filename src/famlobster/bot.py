@@ -200,6 +200,19 @@ async def handle_action_callback(update: Update, context: ContextTypes.DEFAULT_T
 # ---------------------------------------------------------------------------
 
 
+def mcp_server_env() -> dict[str, str]:
+    """Environment for the MCP subprocess: only the settings mcp_server.py reads.
+
+    Secrets it doesn't need (TELEGRAM_BOT_TOKEN, ANTHROPIC_API_KEY) are withheld.
+    The MCP client merges this over its own safe defaults (PATH, HOME, SYSTEMROOT, ...).
+    """
+    return {
+        k: v
+        for k, v in os.environ.items()
+        if k.startswith("GOOGLE_") or k in ("TIMEZONE", "PYTHONPATH")
+    }
+
+
 async def _run_mcp_subprocess(
     params: StdioServerParameters,
     session_ready: asyncio.Event,
@@ -228,7 +241,7 @@ async def post_init(application: Application) -> None:
     params = StdioServerParameters(
         command=sys.executable,
         args=[str(server_path)],
-        env=dict(os.environ),
+        env=mcp_server_env(),
     )
 
     session_ready = asyncio.Event()

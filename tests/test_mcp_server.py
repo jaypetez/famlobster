@@ -224,3 +224,50 @@ def test_list_events_uses_timezone_boundaries(monkeypatch):
     # Should use -07:00 offset (PDT), not Z (UTC)
     assert "2026-04-01T00:00:00-07:00" == call_kwargs["timeMin"]
     assert "2026-04-01T23:59:59-07:00" == call_kwargs["timeMax"]
+
+
+# -------------------------------------------------------------------
+# OAuth scopes
+# -------------------------------------------------------------------
+
+
+def test_requested_scopes_are_event_level_only():
+    from famlobster.mcp_server import BROAD_CALENDAR_SCOPE, SCOPES
+
+    assert "https://www.googleapis.com/auth/calendar.events" in SCOPES
+    assert BROAD_CALENDAR_SCOPE not in SCOPES
+
+
+def _build_with_token_scopes(tmp_path, monkeypatch, scopes):
+    token = tmp_path / "token.json"
+    token.write_text("{}")
+    monkeypatch.setenv("GOOGLE_TOKEN_FILE", str(token))
+    creds = MagicMock(scopes=scopes, expired=False)
+    with (
+        patch("famlobster.mcp_server.Credentials") as creds_cls,
+        patch("famlobster.mcp_server.build"),
+    ):
+        creds_cls.from_authorized_user_file.return_value = creds
+        _make_server().build_google_service()
+    return creds_cls
+
+
+def test_token_scopes_not_overridden(tmp_path, monkeypatch):
+    """Existing tokens must refresh with their own granted scopes."""
+    creds_cls = _build_with_token_scopes(tmp_path, monkeypatch, ["x"])
+    args, kwargs = creds_cls.from_authorized_user_file.call_args
+    assert len(args) == 1 and "scopes" not in kwargs
+
+
+def test_broad_calendar_token_warns(tmp_path, monkeypatch, caplog):
+    from famlobster.mcp_server import BROAD_CALENDAR_SCOPE
+
+    _build_with_token_scopes(tmp_path, monkeypatch, [BROAD_CALENDAR_SCOPE])
+    assert "Re-run auth.py" in caplog.text
+
+
+def test_narrow_token_does_not_warn(tmp_path, monkeypatch, caplog):
+    from famlobster.mcp_server import SCOPES
+
+    _build_with_token_scopes(tmp_path, monkeypatch, SCOPES)
+    assert "Re-run auth.py" not in caplog.text

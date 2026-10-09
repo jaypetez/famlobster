@@ -219,6 +219,8 @@ Replace `youruser@yourserver` with your actual SSH login (e.g., `pi@192.168.1.50
 
 The token auto-refreshes silently — you'll never need to do this again unless you revoke access in your Google account settings.
 
+> **Upgrading from an older version?** Tokens created before `auth.py` switched to the narrower `calendar.events` scope still work, but they grant full Google Calendar management. The bot logs a warning at startup until you re-run `auth.py` and copy the new token over.
+
 ### 7. Allow your family and get your group chat ID
 
 The bot only responds to Telegram users listed in `ALLOWED_USER_IDS`. Until you set it, only `/start` and `/get_id` work.

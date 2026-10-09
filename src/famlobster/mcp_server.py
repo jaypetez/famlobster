@@ -24,6 +24,9 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from mcp.server import Server
 
+# Absolute import: this module also runs as a script (spawned by bot.py)
+from famlobster._fs import write_private
+
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/gmail.send",
@@ -64,8 +67,7 @@ class MCPServer:
 
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            with open(token_file, "w") as f:
-                f.write(creds.to_json())
+            write_private(token_file, creds.to_json())
 
         self.service = build("calendar", "v3", credentials=creds)
         self.gmail = build("gmail", "v1", credentials=creds)

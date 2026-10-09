@@ -72,10 +72,19 @@ def test_dispatch_unknown_tool():
 def test_dispatch_all_tools_registered():
     server = _make_server()
     expected_tools = [
-        "list_events", "create_event", "update_event", "delete_event",
+        "list_events",
+        "create_event",
+        "update_event",
+        "delete_event",
         "send_email",
-        "list_task_lists", "list_tasks", "add_tasks", "complete_task",
-        "delete_task", "clear_completed", "delete_task_list", "rename_task_list",
+        "list_task_lists",
+        "list_tasks",
+        "add_tasks",
+        "complete_task",
+        "delete_task",
+        "clear_completed",
+        "delete_task_list",
+        "rename_task_list",
     ]
     for tool_name in expected_tools:
         # Mock the actual handler to avoid calling Google APIs
@@ -103,19 +112,23 @@ def _make_server_with_tasklists(items):
 
 
 def test_find_task_list_found():
-    server = _make_server_with_tasklists([
-        {"id": "id1", "title": "Costco"},
-        {"id": "id2", "title": "To-Do"},
-    ])
+    server = _make_server_with_tasklists(
+        [
+            {"id": "id1", "title": "Costco"},
+            {"id": "id2", "title": "To-Do"},
+        ]
+    )
     assert server._find_task_list("costco") == "id1"
     assert server._find_task_list("COSTCO") == "id1"
     assert server._find_task_list("To-Do") == "id2"
 
 
 def test_find_task_list_not_found():
-    server = _make_server_with_tasklists([
-        {"id": "id1", "title": "Costco"},
-    ])
+    server = _make_server_with_tasklists(
+        [
+            {"id": "id1", "title": "Costco"},
+        ]
+    )
     assert server._find_task_list("Trader Joe's") is None
 
 
@@ -125,10 +138,12 @@ def test_find_task_list_not_found():
 
 
 def test_list_task_lists():
-    server = _make_server_with_tasklists([
-        {"id": "id1", "title": "Costco"},
-        {"id": "id2", "title": "Home Renovation"},
-    ])
+    server = _make_server_with_tasklists(
+        [
+            {"id": "id1", "title": "Costco"},
+            {"id": "id2", "title": "Home Renovation"},
+        ]
+    )
     result = server._list_task_lists({})
     assert result == [
         {"title": "Costco", "id": "id1"},
@@ -148,9 +163,11 @@ def test_list_task_lists_empty():
 
 
 def test_delete_task_list_success():
-    server = _make_server_with_tasklists([
-        {"id": "id1", "title": "Costco"},
-    ])
+    server = _make_server_with_tasklists(
+        [
+            {"id": "id1", "title": "Costco"},
+        ]
+    )
     result = server._delete_task_list({"list_name": "Costco"})
     assert result == {"status": "deleted", "list": "Costco"}
     server.tasks.tasklists().delete.assert_called()
@@ -168,9 +185,11 @@ def test_delete_task_list_not_found():
 
 
 def test_rename_task_list_success():
-    server = _make_server_with_tasklists([
-        {"id": "id1", "title": "Costco"},
-    ])
+    server = _make_server_with_tasklists(
+        [
+            {"id": "id1", "title": "Costco"},
+        ]
+    )
     result = server._rename_task_list({"list_name": "Costco", "new_name": "Costco Weekly"})
     assert result == {"status": "renamed", "old_name": "Costco", "new_name": "Costco Weekly"}
     server.tasks.tasklists().patch.assert_called()

@@ -12,7 +12,6 @@ Then copy token.json to your server:
     scp token.json youruser@yourserver:~/.config/famlobster/token.json
 """
 
-import json
 import os
 import sys
 
@@ -28,14 +27,18 @@ SCOPES = [
     "https://www.googleapis.com/auth/tasks",
 ]
 
+
 def main():
-    creds_file = input(
-        "Path to credentials.json (press Enter for ./credentials.json): "
-    ).strip() or "credentials.json"
+    creds_file = (
+        input("Path to credentials.json (press Enter for ./credentials.json): ").strip()
+        or "credentials.json"
+    )
 
     if not os.path.exists(creds_file):
         print(f"File not found: {creds_file}")
-        print("Download it from Google Cloud Console → Credentials → your OAuth client → Download JSON")
+        print(
+            "Download it from Google Cloud Console → Credentials → your OAuth client → Download JSON"
+        )
         sys.exit(1)
 
     print("\nOpening browser for Google authorization...")
@@ -50,6 +53,7 @@ def main():
     print("\nNow copy it to your server:")
     print(f"    scp {output} youruser@yourserver:~/.config/famlobster/token.json")
     print("\nThen run the bot on the server — no browser needed from here on.")
+
 
 if __name__ == "__main__":
     main()

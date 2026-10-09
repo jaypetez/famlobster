@@ -22,6 +22,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from mcp import ClientSession
 from telegram import Bot
 
+from ._fs import write_private
 from .reminders import (
     _REMINDER_CHAT_ID,
     add_reminder,
@@ -100,9 +101,7 @@ def _read_config() -> dict:
 
 
 def _write_config(config: dict) -> None:
-    path = Path(CONFIG_FILE)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2))
+    write_private(CONFIG_FILE, json.dumps(config, indent=2))
 
 
 SYSTEM_PROMPT = """You are FamLobster, a friendly personal assistant bot that manages \

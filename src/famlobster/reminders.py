@@ -23,6 +23,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 from mcp import ClientSession
 from telegram import Bot
 
+from ._fs import write_private
+
 logger = logging.getLogger(__name__)
 
 REMINDERS_FILE = os.getenv(
@@ -92,9 +94,7 @@ def _read_reminders_file() -> list[dict]:
 
 def _write_reminders_file(reminders: list[dict]) -> None:
     """Write reminders list to JSON file."""
-    path = Path(REMINDERS_FILE)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(reminders, indent=2))
+    write_private(REMINDERS_FILE, json.dumps(reminders, indent=2))
 
 
 def load_custom_reminders(scheduler: AsyncIOScheduler, agent) -> None:

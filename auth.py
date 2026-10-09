@@ -46,8 +46,11 @@ def main():
     creds = flow.run_local_server(port=0)
 
     output = "token.json"
-    with open(output, "w") as f:
+    # token.json holds a Google refresh token: keep it owner-only (0600)
+    fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         f.write(creds.to_json())
+    os.chmod(output, 0o600)
 
     print(f"\nSaved {output}")
     print("\nNow copy it to your server:")

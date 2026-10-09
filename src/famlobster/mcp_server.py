@@ -12,18 +12,17 @@ import asyncio
 import base64
 import json
 import os
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from zoneinfo import ZoneInfo
 
+import mcp.types as types
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from mcp.server import Server
-import mcp.types as types
 
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
@@ -54,7 +53,6 @@ class MCPServer:
         The token auto-refreshes when expired.
         """
         token_file = os.getenv("GOOGLE_TOKEN_FILE", "token.json")
-        creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
 
         if not os.path.exists(token_file):
             raise FileNotFoundError(
@@ -337,9 +335,7 @@ class MCPServer:
             ]
 
         @self.server.call_tool()
-        async def handle_call_tool(
-            name: str, arguments: dict | None
-        ) -> list[types.TextContent]:
+        async def handle_call_tool(name: str, arguments: dict | None) -> list[types.TextContent]:
             args = arguments or {}
             try:
                 result = await asyncio.get_event_loop().run_in_executor(
@@ -348,6 +344,7 @@ class MCPServer:
                 return [types.TextContent(type="text", text=json.dumps(result))]
             except HttpError as e:
                 import logging
+
                 logging.getLogger(__name__).error(
                     "Google API error calling %s: %s %s", name, e.resp.status, e.reason
                 )
@@ -355,6 +352,7 @@ class MCPServer:
                 return [types.TextContent(type="text", text=json.dumps(error))]
             except Exception as e:
                 import logging
+
                 logging.getLogger(__name__).error(
                     "Unexpected error calling %s: %s", name, e, exc_info=True
                 )
@@ -439,11 +437,7 @@ class MCPServer:
         if "attendees" in args:
             body["attendees"] = [{"email": e} for e in args["attendees"]]
 
-        event = (
-            self.service.events()
-            .insert(calendarId=self.calendar_id, body=body)
-            .execute()
-        )
+        event = self.service.events().insert(calendarId=self.calendar_id, body=body).execute()
         return {
             "id": event["id"],
             "summary": event.get("summary"),
@@ -452,11 +446,7 @@ class MCPServer:
 
     def _update_event(self, args: dict) -> dict:
         event_id = args["event_id"]
-        event = (
-            self.service.events()
-            .get(calendarId=self.calendar_id, eventId=event_id)
-            .execute()
-        )
+        event = self.service.events().get(calendarId=self.calendar_id, eventId=event_id).execute()
 
         if "summary" in args:
             event["summary"] = args["summary"]
@@ -466,9 +456,7 @@ class MCPServer:
             event["location"] = args["location"]
         if "start_datetime" in args:
             start = args["start_datetime"]
-            event["start"] = (
-                {"dateTime": start} if "T" in start else {"date": start}
-            )
+            event["start"] = {"dateTime": start} if "T" in start else {"date": start}
         if "end_datetime" in args:
             end = args["end_datetime"]
             event["end"] = {"dateTime": end} if "T" in end else {"date": end}
@@ -482,9 +470,7 @@ class MCPServer:
 
     def _delete_event(self, args: dict) -> dict:
         event_id = args["event_id"]
-        self.service.events().delete(
-            calendarId=self.calendar_id, eventId=event_id
-        ).execute()
+        self.service.events().delete(calendarId=self.calendar_id, eventId=event_id).execute()
         return {"status": "deleted", "event_id": event_id}
 
     def _send_email(self, args: dict) -> dict:
@@ -493,9 +479,7 @@ class MCPServer:
         message["subject"] = args["subject"]
         message.attach(MIMEText(args["body"], "plain"))
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        result = self.gmail.users().messages().send(
-            userId="me", body={"raw": raw}
-        ).execute()
+        result = self.gmail.users().messages().send(userId="me", body={"raw": raw}).execute()
         return {"status": "sent", "message_id": result.get("id")}
 
     # ------------------------------------------------------------------
@@ -515,16 +499,12 @@ class MCPServer:
         list_id = self._find_task_list(list_name)
         if list_id:
             return list_id
-        new_list = self.tasks.tasklists().insert(
-            body={"title": list_name}
-        ).execute()
+        new_list = self.tasks.tasklists().insert(body={"title": list_name}).execute()
         return new_list["id"]
 
     def _find_task_by_title(self, list_id: str, title: str) -> dict | None:
         """Find the first incomplete task matching title (case-insensitive partial match)."""
-        result = self.tasks.tasks().list(
-            tasklist=list_id, showCompleted=False
-        ).execute()
+        result = self.tasks.tasks().list(tasklist=list_id, showCompleted=False).execute()
         title_lower = title.lower()
         for task in result.get("items", []):
             if title_lower in task.get("title", "").lower():
@@ -533,9 +513,7 @@ class MCPServer:
 
     def _list_tasks(self, args: dict) -> list:
         list_id = self._get_or_create_task_list(args["list_name"])
-        result = self.tasks.tasks().list(
-            tasklist=list_id, showCompleted=False
-        ).execute()
+        result = self.tasks.tasks().list(tasklist=list_id, showCompleted=False).execute()
         return [
             {"title": t.get("title", ""), "status": t.get("status", "")}
             for t in result.get("items", [])
@@ -545,9 +523,7 @@ class MCPServer:
         list_id = self._get_or_create_task_list(args["list_name"])
         added = []
         for item in args["items"]:
-            task = self.tasks.tasks().insert(
-                tasklist=list_id, body={"title": item}
-            ).execute()
+            task = self.tasks.tasks().insert(tasklist=list_id, body={"title": item}).execute()
             added.append(task.get("title", ""))
         return {"status": "added", "items": added, "list": args["list_name"]}
 
@@ -555,21 +531,21 @@ class MCPServer:
         list_id = self._get_or_create_task_list(args["list_name"])
         task = self._find_task_by_title(list_id, args["task_title"])
         if not task:
-            return {"error": f"No task matching '{args['task_title']}' found in {args['list_name']}"}
+            return {
+                "error": f"No task matching '{args['task_title']}' found in {args['list_name']}"
+            }
         task["status"] = "completed"
-        self.tasks.tasks().update(
-            tasklist=list_id, task=task["id"], body=task
-        ).execute()
+        self.tasks.tasks().update(tasklist=list_id, task=task["id"], body=task).execute()
         return {"status": "completed", "title": task["title"]}
 
     def _delete_task(self, args: dict) -> dict:
         list_id = self._get_or_create_task_list(args["list_name"])
         task = self._find_task_by_title(list_id, args["task_title"])
         if not task:
-            return {"error": f"No task matching '{args['task_title']}' found in {args['list_name']}"}
-        self.tasks.tasks().delete(
-            tasklist=list_id, task=task["id"]
-        ).execute()
+            return {
+                "error": f"No task matching '{args['task_title']}' found in {args['list_name']}"
+            }
+        self.tasks.tasks().delete(tasklist=list_id, task=task["id"]).execute()
         return {"status": "deleted", "title": task["title"]}
 
     def _clear_completed(self, args: dict) -> dict:
@@ -580,8 +556,7 @@ class MCPServer:
     def _list_task_lists(self, args: dict) -> list:
         result = self.tasks.tasklists().list().execute()
         return [
-            {"title": tl.get("title", ""), "id": tl.get("id", "")}
-            for tl in result.get("items", [])
+            {"title": tl.get("title", ""), "id": tl.get("id", "")} for tl in result.get("items", [])
         ]
 
     def _delete_task_list(self, args: dict) -> dict:
@@ -595,14 +570,13 @@ class MCPServer:
         list_id = self._find_task_list(args["list_name"])
         if not list_id:
             return {"error": f"Task list '{args['list_name']}' not found"}
-        self.tasks.tasklists().patch(
-            tasklist=list_id, body={"title": args["new_name"]}
-        ).execute()
+        self.tasks.tasklists().patch(tasklist=list_id, body={"title": args["new_name"]}).execute()
         return {"status": "renamed", "old_name": args["list_name"], "new_name": args["new_name"]}
 
 
 if __name__ == "__main__":
     import asyncio
+
     from mcp.server.stdio import stdio_server
 
     async def _serve() -> None:

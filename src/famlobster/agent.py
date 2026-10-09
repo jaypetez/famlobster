@@ -85,9 +85,7 @@ If an operation fails, explain what went wrong in plain English.\
 {personality}"""
 
 # Tool names handled locally (not forwarded to MCP subprocess)
-LOCAL_REMINDER_TOOLS = {
-    "list_reminders", "add_reminder", "update_reminder", "remove_reminder"
-}
+LOCAL_REMINDER_TOOLS = {"list_reminders", "add_reminder", "update_reminder", "remove_reminder"}
 
 REMINDER_TOOL_DEFS = [
     {
@@ -195,8 +193,12 @@ class FamilyAgent:
         ]
         # Add local reminder tools
         self.tools.extend(REMINDER_TOOL_DEFS)
-        logger.info("Loaded %d tools (%d MCP + %d local)", len(self.tools),
-                     len(self.tools) - len(REMINDER_TOOL_DEFS), len(REMINDER_TOOL_DEFS))
+        logger.info(
+            "Loaded %d tools (%d MCP + %d local)",
+            len(self.tools),
+            len(self.tools) - len(REMINDER_TOOL_DEFS),
+            len(REMINDER_TOOL_DEFS),
+        )
 
     def clear_history(self, chat_id: int) -> None:
         self.conversation_history.pop(chat_id, None)
@@ -272,16 +274,12 @@ class FamilyAgent:
             if response.stop_reason == "end_turn":
                 # Extract text from the response and save to history
                 text = self._extract_text(response.content)
-                history.append(
-                    {"role": "assistant", "content": response.content}
-                )
+                history.append({"role": "assistant", "content": response.content})
                 return text
 
             if response.stop_reason == "tool_use":
                 # Append the full assistant message (text + tool_use blocks)
-                history.append(
-                    {"role": "assistant", "content": response.content}
-                )
+                history.append({"role": "assistant", "content": response.content})
 
                 # Execute every tool call and collect results
                 tool_results = []

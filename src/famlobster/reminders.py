@@ -111,9 +111,7 @@ def load_custom_reminders(scheduler: AsyncIOScheduler, agent) -> None:
             logger.exception("Failed to restore reminder %s", r.get("id"))
 
 
-def _register_job(
-    scheduler: AsyncIOScheduler, agent, reminder: dict, tz: str
-) -> None:
+def _register_job(scheduler: AsyncIOScheduler, agent, reminder: dict, tz: str) -> None:
     """Register a single custom reminder as an APScheduler job."""
     schedule = reminder["schedule"]
     if schedule["type"] == "cron":
@@ -235,7 +233,9 @@ def update_reminder(
         if hour is not None or minute is not None:
             old_trigger = job.trigger
             new_hour = hour if hour is not None else old_trigger.fields[5].expressions[0].first  # noqa: E501
-            new_minute = minute if minute is not None else old_trigger.fields[6].expressions[0].first  # noqa: E501
+            new_minute = (
+                minute if minute is not None else old_trigger.fields[6].expressions[0].first
+            )  # noqa: E501
             scheduler.reschedule_job(
                 reminder_id,
                 trigger=CronTrigger(hour=new_hour, minute=new_minute, timezone=tz),
@@ -333,13 +333,15 @@ def get_all_reminders(scheduler: AsyncIOScheduler) -> list[dict]:
     active_ids = {j.id for j in jobs}
     for r in file_reminders:
         if r["id"] not in active_ids:
-            result.append({
-                "id": r["id"],
-                "name": r.get("message", ""),
-                "next_run": None,
-                "paused": True,
-                "type": r["schedule"]["type"],
-            })
+            result.append(
+                {
+                    "id": r["id"],
+                    "name": r.get("message", ""),
+                    "next_run": None,
+                    "paused": True,
+                    "type": r["schedule"]["type"],
+                }
+            )
 
     return result
 
@@ -349,9 +351,7 @@ def get_all_reminders(scheduler: AsyncIOScheduler) -> list[dict]:
 # ------------------------------------------------------------------
 
 
-async def send_morning_summary(
-    bot: Bot, mcp_session: ClientSession, chat_id: str
-) -> None:
+async def send_morning_summary(bot: Bot, mcp_session: ClientSession, chat_id: str) -> None:
     """Fetch today's events and send a morning briefing."""
     tz = os.getenv("TIMEZONE", "America/Chicago")
     today = datetime.now(ZoneInfo(tz)).date().isoformat()
@@ -422,9 +422,7 @@ async def send_pre_event_reminders(
             mins_away = int((start_dt - now).total_seconds() / 60)
             text = f"Reminder: *{event['summary']}* starts in {mins_away} minutes!"
             try:
-                await bot.send_message(
-                    chat_id=int(chat_id), text=text, parse_mode="Markdown"
-                )
+                await bot.send_message(chat_id=int(chat_id), text=text, parse_mode="Markdown")
                 _reminded_event_ids.add(event_id)
                 logger.info("Sent pre-event reminder for event %s", event_id)
             except Exception:
@@ -432,9 +430,7 @@ async def send_pre_event_reminders(
 
     # Prune event IDs for events that have already passed to keep the set small
     _reminded_event_ids.difference_update(
-        eid
-        for eid in list(_reminded_event_ids)
-        if eid not in {e.get("id") for e in events}
+        eid for eid in list(_reminded_event_ids) if eid not in {e.get("id") for e in events}
     )
 
 
@@ -446,6 +442,6 @@ def _format_time(iso_str: str) -> str:
         return iso_str  # all-day event, return date as-is
     try:
         dt = datetime.fromisoformat(iso_str)
-        return dt.strftime("%-I:%M %p")
+        return dt.strftime("%I:%M %p").lstrip("0")
     except ValueError:
         return iso_str

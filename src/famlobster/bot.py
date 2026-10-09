@@ -32,8 +32,8 @@ from telegram.ext import (
 
 load_dotenv()
 
-from .agent import PERSONALITY_PRESETS, FamilyAgent
-from .reminders import load_custom_reminders, setup_scheduler
+from .agent import PERSONALITY_PRESETS, FamilyAgent  # noqa: E402
+from .reminders import load_custom_reminders, setup_scheduler  # noqa: E402
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
@@ -110,9 +110,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         reply = await agent.process_message(chat_id, user_text)
     except Exception:
         logger.exception("Agent error for chat %d", chat_id)
-        await update.message.reply_text(
-            "Sorry, something went wrong. Please try again."
-        )
+        await update.message.reply_text("Sorry, something went wrong. Please try again.")
         return
 
     await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
@@ -206,7 +204,7 @@ async def post_shutdown(application: Application) -> None:
     if mcp_task and not mcp_task.done():
         try:
             await asyncio.wait_for(mcp_task, timeout=5.0)
-        except (asyncio.TimeoutError, Exception):
+        except (TimeoutError, Exception):
             mcp_task.cancel()
 
     logger.info("FamLobster shut down cleanly")
@@ -223,20 +221,14 @@ def main() -> None:
         raise ValueError("TELEGRAM_BOT_TOKEN is not set in .env")
 
     application = (
-        Application.builder()
-        .token(token)
-        .post_init(post_init)
-        .post_shutdown(post_shutdown)
-        .build()
+        Application.builder().token(token).post_init(post_init).post_shutdown(post_shutdown).build()
     )
 
     application.add_handler(CommandHandler("start", handle_start))
     application.add_handler(CommandHandler("reset", handle_reset))
     application.add_handler(CommandHandler("get_id", handle_get_id))
     application.add_handler(CommandHandler("personality", handle_personality))
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-    )
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Starting polling...")
     application.run_polling(drop_pending_updates=True)

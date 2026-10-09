@@ -11,6 +11,7 @@ Exposes thirteen tools to Claude:
 import asyncio
 import base64
 import json
+import logging
 import os
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
@@ -27,11 +28,15 @@ from mcp.server import Server
 # Absolute import: this module also runs as a script (spawned by bot.py)
 from famlobster._fs import write_private
 
+logger = logging.getLogger(__name__)
+
+# Scopes requested by auth.py. Event access only, not full calendar management.
 SCOPES = [
-    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/tasks",
 ]
+BROAD_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
 
 
 class MCPServer:
@@ -63,7 +68,14 @@ class MCPServer:
                 "See README.md for instructions."
             )
 
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        # Use the scopes recorded in token.json: forcing different scopes on refresh can
+        # fail with invalid_scope for tokens issued before the scope was narrowed.
+        creds = Credentials.from_authorized_user_file(token_file)
+        if creds.scopes and BROAD_CALENDAR_SCOPE in creds.scopes:
+            logger.warning(
+                "token.json grants full Google Calendar access. Re-run auth.py to issue a "
+                "token limited to calendar events (calendar.events)."
+            )
 
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())

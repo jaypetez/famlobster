@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
     "python-telegram-bot==21.6",
     "anthropic>=0.40.0",
-    "mcp==1.1.2",
+    "mcp==2.3.0",
     "google-api-python-client==2.149.0",
     "google-auth-httplib2==0.2.0",
     "google-auth-oauthlib==1.2.1",

@@ -167,3 +167,10 @@ def test_callback_handler_registered(make_app):
         isinstance(h, CallbackQueryHandler) and h.callback is handle_action_callback
         for h in app.handlers[0]
     )
+
+
+def test_httpx_request_logging_suppressed():
+    """httpx INFO logs include the bot token in Telegram API URLs."""
+    import logging
+
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING

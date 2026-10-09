@@ -192,3 +192,23 @@ def test_mcp_server_env_withholds_unrelated_secrets(monkeypatch):
     assert env["GOOGLE_TOKEN_FILE"] == "/srv/token.json"
     assert env["GOOGLE_CALENDAR_ID"] == "family"
     assert env["TIMEZONE"] == "America/Denver"
+
+
+async def test_reply_falls_back_to_plain_text_on_bad_markdown():
+    from telegram.error import BadRequest
+
+    agent = MagicMock()
+    agent.process_message = AsyncMock(return_value="unbalanced *markdown")
+    agent.pop_new_actions.return_value = []
+    message = MagicMock(text="hi")
+    message.reply_text = AsyncMock(side_effect=[BadRequest("Can't parse entities"), None])
+    update = SimpleNamespace(message=message, effective_chat=SimpleNamespace(id=OWNER_ID))
+    context = SimpleNamespace(
+        bot_data={"agent": agent}, bot=MagicMock(send_chat_action=AsyncMock())
+    )
+
+    await handle_message(update, context)
+
+    assert message.reply_text.await_count == 2
+    assert message.reply_text.call_args.args == ("unbalanced *markdown",)
+    assert "parse_mode" not in message.reply_text.call_args.kwargs

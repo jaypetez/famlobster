@@ -22,6 +22,8 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from mcp import ClientSession
 from telegram import Bot
+from telegram.error import BadRequest
+from telegram.helpers import escape_markdown
 
 from ._fs import write_private
 
@@ -157,7 +159,7 @@ async def send_custom_reminder(agent, message: str) -> None:
     chat_id = int(chat_id_str)
     try:
         response = await agent.process_message(_REMINDER_CHAT_ID, message)
-        await agent.bot.send_message(chat_id=chat_id, text=response, parse_mode="Markdown")
+        await send_markdown(agent.bot, chat_id, response)
     except Exception:
         logger.exception("Agent failed to process reminder, sending raw message")
         try:
@@ -420,7 +422,9 @@ async def send_pre_event_reminders(
 
         if now <= start_dt <= window_end:
             mins_away = int((start_dt - now).total_seconds() / 60)
-            text = f"Reminder: *{event['summary']}* starts in {mins_away} minutes!"
+            # Event titles are untrusted (anyone can send an invite): escape them
+            title = escape_markdown(event["summary"], version=1)
+            text = f"Reminder: *{title}* starts in {mins_away} minutes!"
             try:
                 await bot.send_message(chat_id=int(chat_id), text=text, parse_mode="Markdown")
                 _reminded_event_ids.add(event_id)
@@ -432,6 +436,15 @@ async def send_pre_event_reminders(
     _reminded_event_ids.difference_update(
         eid for eid in list(_reminded_event_ids) if eid not in {e.get("id") for e in events}
     )
+
+
+async def send_markdown(bot: Bot, chat_id: int, text: str) -> None:
+    """Send as Markdown, falling back to plain text if Telegram rejects the formatting."""
+    try:
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+    except BadRequest:
+        logger.warning("Markdown rejected by Telegram, resending as plain text")
+        await bot.send_message(chat_id=chat_id, text=text)
 
 
 def _format_time(iso_str: str) -> str:

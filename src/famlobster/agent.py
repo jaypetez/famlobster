@@ -187,7 +187,7 @@ class FamilyAgent:
             {
                 "name": tool.name,
                 "description": tool.description or "",
-                "input_schema": tool.inputSchema,
+                "input_schema": tool.input_schema,
             }
             for tool in result.tools
         ]

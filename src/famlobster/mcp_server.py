@@ -38,8 +38,7 @@ class MCPServer:
         self.tasks = None
         self.calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
         self.timezone = os.getenv("TIMEZONE", "America/Chicago")
-        self.server = Server("famlobster")
-        self._register_tools()
+        self.server = self._build_server()
 
     # ------------------------------------------------------------------
     # Google Auth
@@ -92,256 +91,259 @@ class MCPServer:
     # Tool registration
     # ------------------------------------------------------------------
 
-    def _register_tools(self) -> None:
-        @self.server.list_tools()
-        async def handle_list_tools() -> list[types.Tool]:
-            return [
-                types.Tool(
-                    name="list_events",
-                    description="List upcoming calendar events in a date range.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "start_date": {
-                                "type": "string",
-                                "description": "Start date in ISO format (YYYY-MM-DD)",
+    def _build_server(self) -> Server:
+        async def handle_list_tools(ctx, params) -> types.ListToolsResult:
+            return types.ListToolsResult(
+                tools=[
+                    types.Tool(
+                        name="list_events",
+                        description="List upcoming calendar events in a date range.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "start_date": {
+                                    "type": "string",
+                                    "description": "Start date in ISO format (YYYY-MM-DD)",
+                                },
+                                "end_date": {
+                                    "type": "string",
+                                    "description": "End date in ISO format (YYYY-MM-DD)",
+                                },
+                                "max_results": {
+                                    "type": "integer",
+                                    "description": "Maximum number of events to return (default 20)",
+                                    "default": 20,
+                                },
                             },
-                            "end_date": {
-                                "type": "string",
-                                "description": "End date in ISO format (YYYY-MM-DD)",
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Maximum number of events to return (default 20)",
-                                "default": 20,
-                            },
+                            "required": ["start_date", "end_date"],
                         },
-                        "required": ["start_date", "end_date"],
-                    },
-                ),
-                types.Tool(
-                    name="create_event",
-                    description="Create a new calendar event.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "summary": {
-                                "type": "string",
-                                "description": "Event title",
+                    ),
+                    types.Tool(
+                        name="create_event",
+                        description="Create a new calendar event.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "summary": {
+                                    "type": "string",
+                                    "description": "Event title",
+                                },
+                                "start_datetime": {
+                                    "type": "string",
+                                    "description": "Start date/time in ISO 8601 format with timezone (e.g. 2026-03-25T14:00:00-06:00). For all-day events use YYYY-MM-DD.",
+                                },
+                                "end_datetime": {
+                                    "type": "string",
+                                    "description": "End date/time in ISO 8601 format with timezone. For all-day events use YYYY-MM-DD.",
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "Event description (optional)",
+                                },
+                                "location": {
+                                    "type": "string",
+                                    "description": "Event location (optional)",
+                                },
+                                "attendees": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of attendee email addresses (optional)",
+                                },
                             },
-                            "start_datetime": {
-                                "type": "string",
-                                "description": "Start date/time in ISO 8601 format with timezone (e.g. 2026-03-25T14:00:00-06:00). For all-day events use YYYY-MM-DD.",
-                            },
-                            "end_datetime": {
-                                "type": "string",
-                                "description": "End date/time in ISO 8601 format with timezone. For all-day events use YYYY-MM-DD.",
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "Event description (optional)",
-                            },
-                            "location": {
-                                "type": "string",
-                                "description": "Event location (optional)",
-                            },
-                            "attendees": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of attendee email addresses (optional)",
-                            },
+                            "required": ["summary", "start_datetime", "end_datetime"],
                         },
-                        "required": ["summary", "start_datetime", "end_datetime"],
-                    },
-                ),
-                types.Tool(
-                    name="update_event",
-                    description="Update an existing calendar event. Provide the event_id and only the fields you want to change.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "event_id": {
-                                "type": "string",
-                                "description": "The Google Calendar event ID",
+                    ),
+                    types.Tool(
+                        name="update_event",
+                        description="Update an existing calendar event. Provide the event_id and only the fields you want to change.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "event_id": {
+                                    "type": "string",
+                                    "description": "The Google Calendar event ID",
+                                },
+                                "summary": {"type": "string"},
+                                "start_datetime": {"type": "string"},
+                                "end_datetime": {"type": "string"},
+                                "description": {"type": "string"},
+                                "location": {"type": "string"},
                             },
-                            "summary": {"type": "string"},
-                            "start_datetime": {"type": "string"},
-                            "end_datetime": {"type": "string"},
-                            "description": {"type": "string"},
-                            "location": {"type": "string"},
+                            "required": ["event_id"],
                         },
-                        "required": ["event_id"],
-                    },
-                ),
-                types.Tool(
-                    name="delete_event",
-                    description="Delete a calendar event by its ID.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "event_id": {
-                                "type": "string",
-                                "description": "The Google Calendar event ID to delete",
-                            }
+                    ),
+                    types.Tool(
+                        name="delete_event",
+                        description="Delete a calendar event by its ID.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "event_id": {
+                                    "type": "string",
+                                    "description": "The Google Calendar event ID to delete",
+                                }
+                            },
+                            "required": ["event_id"],
                         },
-                        "required": ["event_id"],
-                    },
-                ),
-                types.Tool(
-                    name="send_email",
-                    description="Send an email via Gmail.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "to": {
-                                "type": "string",
-                                "description": "Recipient email address",
+                    ),
+                    types.Tool(
+                        name="send_email",
+                        description="Send an email via Gmail.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "to": {
+                                    "type": "string",
+                                    "description": "Recipient email address",
+                                },
+                                "subject": {
+                                    "type": "string",
+                                    "description": "Email subject line",
+                                },
+                                "body": {
+                                    "type": "string",
+                                    "description": "Plain text email body",
+                                },
                             },
-                            "subject": {
-                                "type": "string",
-                                "description": "Email subject line",
-                            },
-                            "body": {
-                                "type": "string",
-                                "description": "Plain text email body",
-                            },
+                            "required": ["to", "subject", "body"],
                         },
-                        "required": ["to", "subject", "body"],
-                    },
-                ),
-                types.Tool(
-                    name="list_task_lists",
-                    description="List all task lists. Use this to discover what lists exist before creating duplicates.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {},
-                    },
-                ),
-                types.Tool(
-                    name="list_tasks",
-                    description="List incomplete tasks from a task list.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "list_name": {
-                                "type": "string",
-                                "description": "Name of the task list (e.g. 'Costco', 'Home Renovation', 'To-Do')",
-                            },
+                    ),
+                    types.Tool(
+                        name="list_task_lists",
+                        description="List all task lists. Use this to discover what lists exist before creating duplicates.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {},
                         },
-                        "required": ["list_name"],
-                    },
-                ),
-                types.Tool(
-                    name="add_tasks",
-                    description="Add one or more tasks to a task list. The list is created automatically if it doesn't exist.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "list_name": {
-                                "type": "string",
-                                "description": "Name of the task list (e.g. 'Costco', 'Home Renovation', 'To-Do')",
+                    ),
+                    types.Tool(
+                        name="list_tasks",
+                        description="List incomplete tasks from a task list.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "list_name": {
+                                    "type": "string",
+                                    "description": "Name of the task list (e.g. 'Costco', 'Home Renovation', 'To-Do')",
+                                },
                             },
-                            "items": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of task titles to add",
-                            },
+                            "required": ["list_name"],
                         },
-                        "required": ["list_name", "items"],
-                    },
-                ),
-                types.Tool(
-                    name="complete_task",
-                    description="Mark a task as completed by its title (case-insensitive partial match).",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "list_name": {
-                                "type": "string",
-                                "description": "Name of the task list",
+                    ),
+                    types.Tool(
+                        name="add_tasks",
+                        description="Add one or more tasks to a task list. The list is created automatically if it doesn't exist.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "list_name": {
+                                    "type": "string",
+                                    "description": "Name of the task list (e.g. 'Costco', 'Home Renovation', 'To-Do')",
+                                },
+                                "items": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of task titles to add",
+                                },
                             },
-                            "task_title": {
-                                "type": "string",
-                                "description": "Title (or partial title) of the task to complete",
-                            },
+                            "required": ["list_name", "items"],
                         },
-                        "required": ["list_name", "task_title"],
-                    },
-                ),
-                types.Tool(
-                    name="delete_task",
-                    description="Delete a task entirely by its title (case-insensitive partial match).",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "list_name": {
-                                "type": "string",
-                                "description": "Name of the task list",
+                    ),
+                    types.Tool(
+                        name="complete_task",
+                        description="Mark a task as completed by its title (case-insensitive partial match).",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "list_name": {
+                                    "type": "string",
+                                    "description": "Name of the task list",
+                                },
+                                "task_title": {
+                                    "type": "string",
+                                    "description": "Title (or partial title) of the task to complete",
+                                },
                             },
-                            "task_title": {
-                                "type": "string",
-                                "description": "Title (or partial title) of the task to delete",
-                            },
+                            "required": ["list_name", "task_title"],
                         },
-                        "required": ["list_name", "task_title"],
-                    },
-                ),
-                types.Tool(
-                    name="clear_completed",
-                    description="Remove all completed tasks from a task list.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "list_name": {
-                                "type": "string",
-                                "description": "Name of the task list",
+                    ),
+                    types.Tool(
+                        name="delete_task",
+                        description="Delete a task entirely by its title (case-insensitive partial match).",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "list_name": {
+                                    "type": "string",
+                                    "description": "Name of the task list",
+                                },
+                                "task_title": {
+                                    "type": "string",
+                                    "description": "Title (or partial title) of the task to delete",
+                                },
                             },
+                            "required": ["list_name", "task_title"],
                         },
-                        "required": ["list_name"],
-                    },
-                ),
-                types.Tool(
-                    name="delete_task_list",
-                    description="Delete an entire task list and all its tasks.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "list_name": {
-                                "type": "string",
-                                "description": "Name of the task list to delete",
+                    ),
+                    types.Tool(
+                        name="clear_completed",
+                        description="Remove all completed tasks from a task list.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "list_name": {
+                                    "type": "string",
+                                    "description": "Name of the task list",
+                                },
                             },
+                            "required": ["list_name"],
                         },
-                        "required": ["list_name"],
-                    },
-                ),
-                types.Tool(
-                    name="rename_task_list",
-                    description="Rename an existing task list.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "list_name": {
-                                "type": "string",
-                                "description": "Current name of the task list",
+                    ),
+                    types.Tool(
+                        name="delete_task_list",
+                        description="Delete an entire task list and all its tasks.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "list_name": {
+                                    "type": "string",
+                                    "description": "Name of the task list to delete",
+                                },
                             },
-                            "new_name": {
-                                "type": "string",
-                                "description": "New name for the task list",
-                            },
+                            "required": ["list_name"],
                         },
-                        "required": ["list_name", "new_name"],
-                    },
-                ),
-            ]
+                    ),
+                    types.Tool(
+                        name="rename_task_list",
+                        description="Rename an existing task list.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {
+                                "list_name": {
+                                    "type": "string",
+                                    "description": "Current name of the task list",
+                                },
+                                "new_name": {
+                                    "type": "string",
+                                    "description": "New name for the task list",
+                                },
+                            },
+                            "required": ["list_name", "new_name"],
+                        },
+                    ),
+                ]
+            )
 
-        @self.server.call_tool()
-        async def handle_call_tool(name: str, arguments: dict | None) -> list[types.TextContent]:
-            args = arguments or {}
+        async def handle_call_tool(
+            ctx, params: types.CallToolRequestParams
+        ) -> types.CallToolResult:
+            name = params.name
+            args = params.arguments or {}
             try:
                 result = await asyncio.get_event_loop().run_in_executor(
                     None, self._dispatch, name, args
                 )
-                return [types.TextContent(type="text", text=json.dumps(result))]
+                return self._text_result(result)
             except HttpError as e:
                 import logging
 
@@ -349,7 +351,7 @@ class MCPServer:
                     "Google API error calling %s: %s %s", name, e.resp.status, e.reason
                 )
                 error = {"error": str(e.reason), "code": e.resp.status}
-                return [types.TextContent(type="text", text=json.dumps(error))]
+                return self._text_result(error)
             except Exception as e:
                 import logging
 
@@ -357,7 +359,15 @@ class MCPServer:
                     "Unexpected error calling %s: %s", name, e, exc_info=True
                 )
                 error = {"error": str(e)}
-                return [types.TextContent(type="text", text=json.dumps(error))]
+                return self._text_result(error)
+
+        return Server("famlobster", on_list_tools=handle_list_tools, on_call_tool=handle_call_tool)
+
+    @staticmethod
+    def _text_result(payload: dict | list) -> types.CallToolResult:
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text=json.dumps(payload))]
+        )
 
     def _dispatch(self, name: str, args: dict) -> dict | list:
         """Synchronous dispatch to the appropriate API call."""

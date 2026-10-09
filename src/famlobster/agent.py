@@ -34,6 +34,10 @@ from .reminders import (
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_TURNS = 20  # max user+assistant pairs to keep per chat
+MAX_TOOL_ITERATIONS = 10  # max model calls per user message, bounds cost of runaway loops
+TOOL_LIMIT_REPLY = (
+    "Sorry, that took more steps than I'm allowed. Please try a simpler or more specific request."
+)
 
 # Outbound actions that can leak data to third parties need an explicit tap from
 # an authorized user before they run (see PendingAction / bot.handle_action_callback).
@@ -310,7 +314,7 @@ class FamilyAgent:
             personality=personality_block,
         )
 
-        while True:
+        for _ in range(MAX_TOOL_ITERATIONS):
             response = await self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
@@ -370,6 +374,13 @@ class FamilyAgent:
 
             # Unexpected stop reason — return whatever text we have
             return self._extract_text(response.content) or "(no response)"
+
+        logger.warning(
+            "Tool loop for chat %d hit the %d-iteration limit", chat_id, MAX_TOOL_ITERATIONS
+        )
+        # History ends with tool results; close the turn so the next message stays valid
+        history.append({"role": "assistant", "content": TOOL_LIMIT_REPLY})
+        return TOOL_LIMIT_REPLY
 
     def _queue_confirmation(self, chat_id: int, tool: str, args: dict) -> dict:
         if chat_id == _REMINDER_CHAT_ID:

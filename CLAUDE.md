@@ -18,6 +18,10 @@ famlobster
 # Run all tests
 pytest -v
 
+# Lint, format check, type check (all run in CI)
+ruff check . && ruff format --check .
+mypy src
+
 # Run a single test file
 pytest tests/test_mcp_server.py -v
 
@@ -77,4 +81,4 @@ Tests use `unittest.mock` — no live API calls. Key fixtures in `conftest.py`:
 
 MCP server tests use `_make_server()` which patches the MCP `Server` class to avoid startup.
 
-CI runs pytest on Python 3.11 and 3.12 via GitHub Actions.
+CI (GitHub Actions) runs ruff, mypy, pytest with coverage on Python 3.11-3.13, a package build, and a dependency audit. `main` is protected: PRs need the `CI success` check and one approval.

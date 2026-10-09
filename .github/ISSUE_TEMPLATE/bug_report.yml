@@ -1,0 +1,31 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Include the message you sent to the bot. Do not paste tokens or API keys.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+  - type: input
+    id: python
+    attributes:
+      label: Python version and OS
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell

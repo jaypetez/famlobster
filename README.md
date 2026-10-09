@@ -12,6 +12,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License"></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/jaypetez/famlobster/actions/workflows/ci.yml"><img src="https://github.com/jaypetez/famlobster/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/jaypetez/famlobster/actions/workflows/codeql.yml"><img src="https://github.com/jaypetez/famlobster/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+</p>
+
 ---
 
 A Telegram bot that manages your Google Calendar, sends email, tracks task lists, and handles scheduled reminders — all through natural language. Powered by Claude AI and the Model Context Protocol (MCP).
@@ -370,3 +375,9 @@ Two things to check:
 
 **Adding Gmail to an existing setup (already had Calendar working)**
 If you set up Calendar first and are adding Gmail now, you must re-authorize even if you already have a token.json — the old token doesn't have Gmail scope. Follow the two steps above.
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup and the PR process, and [SECURITY.md](SECURITY.md) to report vulnerabilities privately. This project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
